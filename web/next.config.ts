@@ -13,6 +13,10 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   poweredByHeader: false,
+  // Every language has its own page; the bare root goes to the default locale.
+  async redirects() {
+    return [{ source: "/", destination: "/ru", permanent: false }];
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

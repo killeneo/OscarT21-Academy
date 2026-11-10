@@ -1,34 +1,33 @@
+/*
+ * Design tokens: "Clean & Playful EdTech".
+ * Contrast notes (WCAG 2.1 AA):
+ *  - ink (#0F2C23) on white / cream / every pastel fill >= 10:1.
+ *  - muted text (#44574f) on white / cream / pastels >= 6.5:1.
+ *  - white on the ink CTA ~ 14:1.
+ *  - Pastels and mint sparkles are FILLS / decoration only, never text on light backgrounds.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  --white: #ffffff;
+  --cream: #fdfbf7;
+  --mint-100: #e6f4ea;
+  --mint-200: #d1e9d2;
+  --mint-sparkle: #7fd1a0;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+  --peach: #fde6d5;
+  --butter: #fef3c7;
+  --mint: #d1fae5;
+  --lavender: #e0e7ff;
 
-html {
-  height: 100%;
-}
+  --ink: #0f2c23;
+  --ink-muted: #44574f;
+  --line: #e4ebe6;
 
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
-}
+  --radius-card: 24px;
+  --radius-sm: 16px;
+  --radius-pill: 999px;
+  --shadow-float: 0 10px 30px rgba(0, 0, 0, 0.05), 0 2px 6px rgba(0, 0, 0, 0.03);
 
-body {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  --font-sans: var(--font-manrope), "Segoe UI", system-ui, sans-serif;
 }
 
 * {
@@ -37,13 +36,101 @@ body {
   margin: 0;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+html {
+  height: 100%;
+  scroll-behavior: smooth;
 }
 
-@media (prefers-color-scheme: dark) {
+html,
+body {
+  max-width: 100vw;
+  /* clip (not hidden): hidden turns body into a scroll container and breaks position: sticky */
+  overflow-x: clip;
+}
+
+body {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  background-color: var(--white);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+}
+
+a {
+  color: inherit;
+}
+
+ul {
+  list-style: none;
+}
+
+/* Anchor targets land below the sticky header. */
+[id] {
+  scroll-margin-top: 96px;
+}
+
+img,
+svg {
+  max-width: 100%;
+}
+
+/* Visible keyboard focus everywhere. */
+:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  left: 16px;
+  top: -64px;
+  z-index: 100;
+  padding: 10px 18px;
+  font-weight: 800;
+  color: var(--white);
+  background: var(--ink);
+  border-radius: var(--radius-pill);
+}
+
+.skip-link:focus {
+  top: 12px;
+  outline-color: var(--mint-sparkle);
+}
+
+/* Motion is decorative: switch it all off for users who ask. */
+@media (prefers-reduced-motion: reduce) {
   html {
-    color-scheme: dark;
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
   }
 }

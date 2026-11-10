@@ -1,0 +1,35 @@
+.switcher ul {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--white);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-pill);
+}
+
+.switcher a {
+  display: grid;
+  place-items: center;
+  min-width: 40px;
+  min-height: 36px;
+  padding: 0 8px;
+  font-weight: 800;
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  border-radius: var(--radius-pill);
+  transition: background-color 0.15s;
+}
+
+.switcher a:hover {
+  background: var(--mint-100);
+}
+
+.switcher .current {
+  color: var(--white);
+  background: var(--ink);
+}
+
+.switcher .current:hover {
+  background: var(--ink);
+}

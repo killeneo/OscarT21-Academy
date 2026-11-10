@@ -1,0 +1,610 @@
+/* Layout */
+.wrap {
+  width: min(1200px, 100% - 32px);
+  margin-inline: auto;
+}
+
+.section {
+  padding-block: 72px;
+}
+
+.cream {
+  background: var(--cream);
+}
+
+.head {
+  max-width: 640px;
+  margin: 0 auto 40px;
+  text-align: center;
+}
+
+.kicker {
+  display: inline-block;
+  padding: 6px 14px;
+  margin-bottom: 14px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--mint-100);
+  border-radius: var(--radius-pill);
+}
+
+.h1 {
+  font-size: clamp(2.3rem, 5.6vw, 4rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.h2 {
+  font-size: clamp(1.8rem, 3.6vw, 2.6rem);
+  font-weight: 800;
+}
+
+.sectionText,
+.lead {
+  margin-top: 14px;
+  color: var(--ink-muted);
+}
+
+.lead {
+  max-width: 52ch;
+  margin-block: 20px 28px;
+  font-size: 1.15rem;
+}
+
+/* Buttons */
+.btnPrimary,
+.btnOutline,
+.btnPlay {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 28px;
+  font-weight: 800;
+  text-decoration: none;
+  border-radius: var(--radius-pill);
+}
+
+.btnPrimary {
+  color: var(--white);
+  background: var(--ink);
+  transition: transform 0.15s, background-color 0.15s;
+}
+
+.btnPrimary:hover {
+  background: #17402f;
+  transform: translateY(-2px);
+}
+
+.btnOutline {
+  border: 2px solid var(--ink);
+}
+
+a.btnOutline:hover {
+  color: var(--white);
+  background: var(--ink);
+}
+
+.btnOutline[aria-disabled="true"] {
+  align-self: flex-start;
+  opacity: 0.7;
+}
+
+.btnPlay {
+  padding: 6px 18px 6px 6px;
+}
+
+.btnPlay:hover {
+  background: var(--mint-100);
+}
+
+.playIcon {
+  width: 44px;
+  height: 44px;
+}
+
+.arrow {
+  width: 20px;
+  height: 20px;
+}
+
+/* Decoration */
+.sparkle {
+  position: absolute;
+  color: var(--mint-sparkle);
+  pointer-events: none;
+}
+
+/* Hero */
+.hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  align-items: center;
+  gap: 40px;
+  padding-block: 56px 40px;
+}
+
+.sparkHeroA {
+  top: 20px;
+  left: 42%;
+  width: 36px;
+}
+
+.sparkHeroB {
+  bottom: 60px;
+  left: -4px;
+  z-index: 2;
+  width: 44px;
+}
+
+.inlineAvatar {
+  display: inline-block;
+  width: 0.95em;
+  height: 0.95em;
+  margin-inline: 0.06em;
+  vertical-align: -0.08em;
+}
+
+.heroActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+}
+
+.heroVisual {
+  position: relative;
+  justify-self: center;
+  width: min(100%, 460px);
+}
+
+.heroScene {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.badges {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.floatCard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 18px 12px 12px;
+  font-size: 0.95rem;
+  line-height: 1.3;
+  background: var(--white);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-float);
+}
+
+.badges .floatCard {
+  position: absolute;
+  animation: bob 6s ease-in-out infinite;
+}
+
+.badgeOne {
+  top: 8%;
+  left: -8%;
+}
+
+.badgeTwo {
+  top: 44%;
+  right: -6%;
+  animation-delay: -2s;
+}
+
+.badgeThree {
+  bottom: 6%;
+  left: 2%;
+  animation-delay: -4s;
+}
+
+.floatIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  background: var(--mint-100);
+  border-radius: 12px;
+}
+
+.floatIcon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.floatText {
+  display: block;
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+
+@keyframes bob {
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+/* Audience bar */
+.audienceLabel {
+  margin-bottom: 14px;
+  color: var(--ink-muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.audience {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px 28px;
+  padding-block: 8px;
+}
+
+.audience li {
+  color: #5d6c65;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+/* Pastel tints */
+.peach {
+  background: var(--peach);
+}
+
+.butter {
+  background: var(--butter);
+}
+
+.mint {
+  background: var(--mint);
+}
+
+.lavender {
+  background: var(--lavender);
+}
+
+/* Category grid */
+.catGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+}
+
+.catCard {
+  padding: 32px 28px;
+  border-radius: var(--radius-card);
+  transition: transform 0.2s;
+}
+
+.catCard:hover {
+  transform: translateY(-4px);
+}
+
+.catIcon {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  margin-bottom: 40px;
+  background: var(--white);
+  border-radius: 20px;
+}
+
+.catIcon svg {
+  width: 40px;
+  height: 40px;
+}
+
+.catCard h3 {
+  font-size: 1.35rem;
+}
+
+.catCard p {
+  margin-top: 6px;
+  color: var(--ink-muted);
+}
+
+/* Value prop */
+.split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: 56px;
+}
+
+.splitVisual {
+  position: relative;
+}
+
+.studyScene {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.valueBadgeA,
+.valueBadgeB {
+  position: absolute;
+}
+
+.valueBadgeA {
+  top: 10%;
+  right: -4%;
+}
+
+.valueBadgeB {
+  bottom: 8%;
+  left: -4%;
+}
+
+.checklist {
+  display: grid;
+  gap: 12px;
+  margin-block: 24px 32px;
+}
+
+.checklist li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+}
+
+.checkIcon {
+  flex: none;
+  width: 26px;
+  height: 26px;
+}
+
+/* Catalog + shared card grid */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 32px;
+}
+
+.filters li,
+.tags li {
+  padding: 8px 18px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  background: var(--white);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-pill);
+}
+
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+}
+
+.specCard,
+.courseCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 16px 24px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-float);
+}
+
+.specCard h3,
+.courseCard h3 {
+  margin-top: 8px;
+  padding-inline: 8px;
+  font-size: 1.3rem;
+}
+
+.specCard > p,
+.courseCard > p,
+.specCard > ul {
+  padding-inline: 8px;
+}
+
+.specTop,
+.cover {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  min-height: 160px;
+  padding: 14px;
+  border-radius: 18px;
+}
+
+.specAvatar {
+  width: 84px;
+  height: 84px;
+  align-self: flex-end;
+}
+
+.sample,
+.pill,
+.pillSoon {
+  padding: 5px 14px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  background: var(--white);
+  border-radius: var(--radius-pill);
+}
+
+.pillSoon {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+}
+
+.coverIcon {
+  align-self: flex-end;
+  width: 64px;
+  height: 64px;
+  margin-left: auto;
+  opacity: 0.85;
+}
+
+.verified {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.verified svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.meta {
+  color: var(--ink-muted);
+  font-size: 0.92rem;
+}
+
+.courseCard > p:not(.meta) {
+  color: var(--ink-muted);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.tags li {
+  padding: 4px 14px;
+  font-size: 0.85rem;
+  background: var(--mint-100);
+  border-color: transparent;
+}
+
+.courseCard .btnOutline {
+  margin: 8px 8px 0;
+  padding: 10px 24px;
+}
+
+.centerAction {
+  margin-top: 36px;
+  text-align: center;
+}
+
+/* Stats */
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+}
+
+.statCard {
+  padding: 36px 32px;
+  border-radius: var(--radius-card);
+}
+
+.statValue {
+  font-size: clamp(3.5rem, 7vw, 5.5rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.statCard h3 {
+  margin-top: 12px;
+  font-size: 1.3rem;
+}
+
+.statCard p:last-child {
+  margin-top: 6px;
+  color: var(--ink-muted);
+}
+
+/* Roles */
+.roleCard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 32px 28px;
+  border-radius: var(--radius-card);
+}
+
+.roleCard h3 {
+  font-size: 1.5rem;
+}
+
+.roleCard p {
+  flex: 1;
+  margin-bottom: 14px;
+  color: var(--ink-muted);
+}
+
+/* CTA band */
+.ctaWrap {
+  padding-block: 24px 72px;
+}
+
+.ctaBand {
+  position: relative;
+  padding: 64px 24px;
+  text-align: center;
+  background: linear-gradient(135deg, var(--mint-100), var(--mint-200));
+  border-radius: 32px;
+}
+
+.ctaBand .btnPrimary {
+  margin-top: 28px;
+}
+
+.sparkCta {
+  top: 24px;
+  right: 8%;
+  width: 40px;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .hero,
+  .split {
+    grid-template-columns: 1fr;
+  }
+
+  .section {
+    padding-block: 48px;
+  }
+
+  .badgeOne {
+    left: 0;
+  }
+
+  .badgeTwo {
+    right: 0;
+  }
+
+  .valueBadgeA {
+    right: 0;
+  }
+
+  .valueBadgeB {
+    left: 0;
+  }
+
+  .sparkHeroA {
+    left: 78%;
+  }
+}
