@@ -1,0 +1,15 @@
+# Local development database only. Run: docker compose -f docker-compose.dev.yml up -d
+# Then: cd web && npm run db:migrate
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres # dev-only credential, never reuse
+      POSTGRES_DB: inclusive_dev
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+volumes:
+  db_data:

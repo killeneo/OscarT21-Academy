@@ -1,63 +1,77 @@
-/* Header */
+/* Header: fixed, compact height. The hero block subtracts --header-h (globals.css) from the viewport. */
 .header {
   position: sticky;
   top: 0;
   z-index: 50;
-  background: rgba(255, 255, 255, 0.92);
+  height: var(--header-h);
+  background: rgba(255, 255, 255, 0.94);
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
 }
 
 .bar {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas: "logo nav actions";
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   width: min(1200px, 100% - 32px);
-  min-height: 72px;
+  height: 100%;
   margin-inline: auto;
 }
 
 .logo {
+  grid-area: logo;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  font-size: 1.35rem;
+  gap: 8px;
+  font-size: 1.1rem;
   font-weight: 800;
   letter-spacing: -0.03em;
+  line-height: 1;
   text-decoration: none;
 }
 
 .logoIcon {
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
+}
+
+.nav {
+  grid-area: nav;
+  justify-self: center;
+  min-width: 0;
 }
 
 .nav ul {
   display: flex;
-  gap: 4px;
+  gap: 2px;
 }
 
 .nav a {
   display: inline-block;
-  padding: 8px 16px;
+  padding: 6px 14px;
+  font-size: 0.95rem;
   font-weight: 600;
+  line-height: 1.4;
   text-decoration: none;
   border-radius: var(--radius-pill);
 }
 
 .nav a:hover {
-  background: var(--mint-100);
+  background: var(--tint-emerald);
 }
 
 .actions {
+  grid-area: actions;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .login {
-  padding: 8px 6px;
+  padding: 6px 8px;
+  font-size: 0.95rem;
   font-weight: 700;
   text-decoration: none;
 }
@@ -68,28 +82,34 @@
 }
 
 .signup {
-  padding: 11px 22px;
+  padding: 7px 18px;
+  font-size: 0.95rem;
   font-weight: 800;
+  line-height: 1.4;
   color: var(--white);
   text-decoration: none;
-  background: var(--ink);
+  white-space: nowrap;
+  background: var(--cta);
   border-radius: var(--radius-pill);
 }
 
 .signup:hover {
-  background: #17402f;
+  background: var(--forest);
 }
 
-/* Below desktop the centered links move to a scrollable second row. */
+/* Below desktop: row 1 = logo + actions, row 2 = scrollable links. Heights add up to --header-h (96px). */
 @media (max-width: 900px) {
   .bar {
-    flex-wrap: wrap;
-    padding-block: 10px;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: 52px 43px;
+    grid-template-areas:
+      "logo actions"
+      "nav nav";
+    gap: 0 8px;
   }
 
   .nav {
-    order: 3;
-    width: 100%;
+    justify-self: stretch;
     overflow-x: auto;
   }
 
@@ -97,63 +117,110 @@
     width: max-content;
   }
 
+  .nav a {
+    padding: 4px 12px;
+  }
+
   .login {
     display: none;
   }
 }
 
-/* Footer */
+/* Very narrow: keep only the logo mark (brand name stays available to screen readers). */
+@media (max-width: 520px) {
+  .brandName {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .signup {
+    padding-inline: 14px;
+    font-size: 0.9rem;
+  }
+}
+
+/*
+ * Footer: dark, a continuation of the closing CTA band. Contrast on #10332d:
+ * white 86% ~11:1, white 62% ~6:1.
+ */
 .footer {
   margin-top: auto;
-  background: var(--mint-100);
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.86);
+  background: #10332d;
+}
+
+.footer :focus-visible {
+  outline-color: var(--gold);
 }
 
 .footerInner {
   display: grid;
-  grid-template-columns: 1.2fr 2fr;
-  gap: 40px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
+  gap: 48px;
   width: min(1200px, 100% - 32px);
   margin-inline: auto;
-  padding-block: 56px 32px;
+  padding-block: 72px 48px;
 }
 
 .brand {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  font-size: 1.35rem;
+  font-size: 1.2rem;
   font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--white);
   text-decoration: none;
 }
 
+/* The logo tile is dark green; a hairline keeps it visible on the dark footer. */
+.brand svg {
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+
 .about {
-  max-width: 34ch;
-  margin-top: 14px;
-  color: var(--ink-muted);
+  max-width: 32ch;
+  margin-top: 16px;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.95rem;
+  line-height: 1.6;
 }
 
 .columns {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 28px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 32px;
 }
 
 .colTitle {
-  margin-bottom: 12px;
-  font-size: 1rem;
-  letter-spacing: 0;
+  margin-bottom: 16px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.62);
 }
 
 .columns li + li {
-  margin-top: 8px;
+  margin-top: 10px;
 }
 
 .columns a {
-  color: var(--ink-muted);
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.86);
+  text-decoration: none;
 }
 
 .columns a:hover {
-  color: var(--ink);
+  color: var(--white);
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 
 .bottom {
@@ -164,14 +231,32 @@
   gap: 16px;
   width: min(1200px, 100% - 32px);
   margin-inline: auto;
-  padding-block: 20px 32px;
-  color: var(--ink-muted);
-  font-size: 0.95rem;
-  border-top: 1px solid var(--mint-200);
+  padding-block: 20px 24px;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.88rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+/* Oversized wordmark: purely decorative, very low contrast on purpose (aria-hidden). */
+.wordmark {
+  width: min(1200px, 100% - 32px);
+  margin: 0 auto -0.12em;
+  font-size: clamp(4.5rem, 17vw, 15rem);
+  font-weight: 800;
+  line-height: 0.9;
+  letter-spacing: -0.06em;
+  color: rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+  user-select: none;
 }
 
 @media (max-width: 760px) {
   .footerInner {
     grid-template-columns: 1fr;
+    padding-block: 56px 32px;
+  }
+
+  .columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

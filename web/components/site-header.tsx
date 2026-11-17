@@ -18,7 +18,7 @@ export function SiteHeader({ m, brand, lang }: Props) {
       <div className={styles.bar}>
         <a href={`/${lang}`} className={styles.logo}>
           <LogoMark className={styles.logoIcon} />
-          <span>{brand}</span>
+          <span className={styles.brandName}>{brand}</span>
         </a>
         <nav aria-label={m.label} className={styles.nav}>
           <ul>
@@ -31,10 +31,10 @@ export function SiteHeader({ m, brand, lang }: Props) {
         </nav>
         <div className={styles.actions}>
           <LangSwitcher current={lang} label={m.langLabel} />
-          <a href="#roles" className={styles.login}>
+          <a href={`/${lang}/login`} className={styles.login}>
             {m.login}
           </a>
-          <a href="#roles" className={styles.signup}>
+          <a href={`/${lang}/register`} className={styles.signup}>
             {m.signup}
           </a>
         </div>

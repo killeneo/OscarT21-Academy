@@ -1,31 +1,40 @@
 /*
- * Design tokens: "Clean & Playful EdTech".
+ * Design tokens: "Inclusive Tech / Trust & Growth".
+ * Brand: emerald #176B5B, deep green #164A42, teal #42A99A, background #F7F8F5, gold #E7B957, graphite #303B3A.
  * Contrast notes (WCAG 2.1 AA):
- *  - ink (#0F2C23) on white / cream / every pastel fill >= 10:1.
- *  - muted text (#44574f) on white / cream / pastels >= 6.5:1.
- *  - white on the ink CTA ~ 14:1.
- *  - Pastels and mint sparkles are FILLS / decoration only, never text on light backgrounds.
+ *  - graphite text (#303B3A) on bg / white / every tint >= 8:1.
+ *  - muted text (#55625F) on bg / white / tints >= 5:1.
+ *  - white on the emerald CTA (#176B5B) ~ 6.4:1; on deep green ~ 10:1.
+ *  - Teal and gold are FILLS / decoration only: no white text on teal, no light text on gold.
  */
 :root {
   --white: #ffffff;
-  --cream: #fdfbf7;
-  --mint-100: #e6f4ea;
-  --mint-200: #d1e9d2;
-  --mint-sparkle: #7fd1a0;
+  --bg: #f7f8f5;
 
-  --peach: #fde6d5;
-  --butter: #fef3c7;
-  --mint: #d1fae5;
-  --lavender: #e0e7ff;
+  --emerald: #176b5b;
+  --forest: #164a42;
+  --teal: #42a99a;
+  --gold: #e7b957;
+  --graphite: #303b3a;
 
-  --ink: #0f2c23;
-  --ink-muted: #44574f;
-  --line: #e4ebe6;
+  --tint-emerald: #dcebe6;
+  --tint-emerald-strong: #c5ddd5;
+  --tint-teal: #d3ece8;
+  --tint-gold: #f9edcb;
+  --tint-sand: #ecefe9;
+
+  --ink: var(--graphite);
+  --ink-muted: #55625f;
+  --cta: var(--emerald);
+  --line: #dfe5e0;
 
   --radius-card: 24px;
   --radius-sm: 16px;
   --radius-pill: 999px;
   --shadow-float: 0 10px 30px rgba(0, 0, 0, 0.05), 0 2px 6px rgba(0, 0, 0, 0.03);
+
+  /* Sticky site header height; the hero fills the rest of the viewport. */
+  --header-h: 56px;
 
   --font-sans: var(--font-manrope), "Segoe UI", system-ui, sans-serif;
 }
@@ -56,7 +65,7 @@ body {
   font-family: var(--font-sans);
   font-size: 1.0625rem;
   line-height: 1.65;
-  background-color: var(--white);
+  background-color: var(--bg);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -77,7 +86,7 @@ ul {
 
 /* Anchor targets land below the sticky header. */
 [id] {
-  scroll-margin-top: 96px;
+  scroll-margin-top: calc(var(--header-h) + 16px);
 }
 
 img,
@@ -87,7 +96,7 @@ svg {
 
 /* Visible keyboard focus everywhere. */
 :focus-visible {
-  outline: 3px solid var(--ink);
+  outline: 3px solid var(--forest);
   outline-offset: 3px;
   border-radius: 8px;
 }
@@ -112,13 +121,13 @@ svg {
   padding: 10px 18px;
   font-weight: 800;
   color: var(--white);
-  background: var(--ink);
+  background: var(--forest);
   border-radius: var(--radius-pill);
 }
 
 .skip-link:focus {
   top: 12px;
-  outline-color: var(--mint-sparkle);
+  outline-color: var(--gold);
 }
 
 /* Motion is decorative: switch it all off for users who ask. */
@@ -132,5 +141,11 @@ svg {
   *::after {
     animation: none !important;
     transition: none !important;
+  }
+}
+
+@media (max-width: 900px) {
+  :root {
+    --header-h: 96px;
   }
 }

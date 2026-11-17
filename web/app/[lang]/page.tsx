@@ -2,8 +2,8 @@ import { notFound } from "next/navigation";
 import {
   AudienceBar,
   Categories,
-  Courses,
   CtaBand,
+  Faq,
   Hero,
   Roles,
   SpecialistCatalog,
@@ -26,15 +26,15 @@ export default async function Home({ params }: PageProps<"/[lang]">) {
       </a>
       <SiteHeader m={m.nav} brand={m.common.brand} lang={lang} />
       <main id="main">
-        <Hero m={m.hero} />
+        <Hero m={m.hero} lang={lang} />
         <AudienceBar m={m.audience} />
-        <Categories m={m.categories} />
+        <Categories m={m.categories} lang={lang} />
         <ValueProp m={m.value} />
         <SpecialistCatalog m={m.catalog} />
-        <Courses m={m.courses} />
         <Stats m={m.stats} />
-        <Roles m={m.roles} />
-        <CtaBand m={m.cta} />
+        <Faq m={m.faq} />
+        <Roles m={m.roles} lang={lang} />
+        <CtaBand m={m.cta} lang={lang} />
       </main>
       <SiteFooter m={m.footer} brand={m.common.brand} lang={lang} langLabel={m.nav.langLabel} />
     </>

@@ -32,7 +32,7 @@ export function SiteFooter({ m, brand, lang, langLabel }: Props) {
               <ul>
                 {col.links.map((link) => (
                   <li key={link.label}>
-                    <a href={link.href}>{link.label}</a>
+                    <a href={link.href === "#privacy" ? `/${lang}/privacy` : link.href}>{link.label}</a>
                   </li>
                 ))}
               </ul>
@@ -47,6 +47,11 @@ export function SiteFooter({ m, brand, lang, langLabel }: Props) {
         </p>
         <LangSwitcher current={lang} label={langLabel} />
       </div>
+
+      {/* Decorative oversized wordmark that closes the page. */}
+      <p className={styles.wordmark} aria-hidden="true">
+        {brand}
+      </p>
     </footer>
   );
 }

@@ -1,7 +1,7 @@
 .switcher ul {
   display: flex;
   gap: 2px;
-  padding: 3px;
+  padding: 2px;
   background: var(--white);
   border: 1.5px solid var(--line);
   border-radius: var(--radius-pill);
@@ -9,12 +9,13 @@
 
 .switcher a {
   display: grid;
+  color: var(--ink);
   place-items: center;
-  min-width: 40px;
-  min-height: 36px;
+  min-width: 34px;
+  min-height: 30px;
   padding: 0 8px;
   font-weight: 800;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   letter-spacing: 0.04em;
   text-decoration: none;
   border-radius: var(--radius-pill);
@@ -22,14 +23,14 @@
 }
 
 .switcher a:hover {
-  background: var(--mint-100);
+  background: var(--tint-emerald);
 }
 
 .switcher .current {
   color: var(--white);
-  background: var(--ink);
+  background: var(--cta);
 }
 
 .switcher .current:hover {
-  background: var(--ink);
+  background: var(--cta);
 }

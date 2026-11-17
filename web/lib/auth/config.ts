@@ -1,0 +1,40 @@
+import { siteUrl } from "@/lib/site";
+
+/** Self-service roles. `moderator` and `admin` are never assignable through public endpoints. */
+export const SELF_ROLES = ["parent", "specialist", "organization"] as const;
+export type SelfRole = (typeof SELF_ROLES)[number];
+export const DEFAULT_ROLE: SelfRole = "parent";
+
+/** Version of the personal-data consent text the user agreed to (bump when the policy changes). */
+export const CONSENT_VERSION = "2026-11-draft";
+
+export function isSelfRole(value: unknown): value is SelfRole {
+  return typeof value === "string" && (SELF_ROLES as readonly string[]).includes(value);
+}
+
+export const isProduction = process.env.NODE_ENV === "production";
+
+/** `__Host-` cookies require Secure + Path=/ + no Domain, so they are used only in production (HTTPS). */
+export const SESSION_COOKIE = isProduction ? "__Host-session" : "session";
+/** Short-lived cookie holding the OAuth state + PKCE verifier. */
+export const GOOGLE_COOKIE = "google_oauth";
+export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 14;
+
+export function googleConfig() {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return null;
+  return { clientId, clientSecret, redirectUri: `${siteUrl}/api/auth/google/callback` };
+}
+
+export function telegramConfig() {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const botUsername = process.env.TELEGRAM_BOT_USERNAME;
+  if (!botToken || !botUsername) return null;
+  return { botToken, botUsername };
+}
+
+/** Which providers are configured, safe to pass to client components (no secrets). */
+export function providerAvailability() {
+  return { google: googleConfig() !== null, telegramBot: telegramConfig()?.botUsername ?? null };
+}
