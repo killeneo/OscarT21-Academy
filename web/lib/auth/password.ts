@@ -10,12 +10,46 @@ const OPTIONS: ScryptOptions = { N, r: R, p: P, maxmem: 256 * 1024 * 1024 };
 export const PASSWORD_MIN = 10;
 export const PASSWORD_MAX = 128;
 
+/** Thrown when too many password hashes are already waiting; routes answer 503 instead of queueing forever. */
+export class PasswordHashBusyError extends Error {}
+
+/**
+ * Concurrency gate: at most `maxActive` tasks run at once and at most `maxQueued` wait; beyond that it throws
+ * PasswordHashBusyError. A freed slot is handed straight to the next waiter.
+ */
+export function createLimiter(maxActive: number, maxQueued: number) {
+  let active = 0;
+  const waiting: Array<() => void> = [];
+  return async function run<T>(task: () => Promise<T>): Promise<T> {
+    if (active < maxActive) {
+      active++;
+    } else {
+      if (waiting.length >= maxQueued) throw new PasswordHashBusyError("password hashing queue is full");
+      await new Promise<void>((resolve) => waiting.push(resolve));
+    }
+    try {
+      return await task();
+    } finally {
+      const next = waiting.shift();
+      if (next) next();
+      else active--;
+    }
+  };
+}
+
+// Each derivation holds ~32 MiB and one libuv thread (4 by default, shared with fs/dns/zlib). Unbounded, a burst
+// of login/sign-up requests exhausts memory and stalls the whole process, so only a few run at a time.
+const hashSlot = createLimiter(2, 64);
+
 function derive(password: string, salt: Buffer, n: number, r: number, p: number): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    scrypt(password.normalize("NFKC"), salt, KEY_LEN, { ...OPTIONS, N: n, r, p }, (err, key) =>
-      err ? reject(err) : resolve(key),
-    );
-  });
+  return hashSlot(
+    () =>
+      new Promise<Buffer>((resolve, reject) => {
+        scrypt(password.normalize("NFKC"), salt, KEY_LEN, { ...OPTIONS, N: n, r, p }, (err, key) =>
+          err ? reject(err) : resolve(key),
+        );
+      }),
+  );
 }
 
 /** Format: scrypt$N$r$p$salt(base64)$hash(base64). */

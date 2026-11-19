@@ -62,3 +62,70 @@ test("telegram: malformed input is rejected", () => {
     assert.equal(verifyTelegramAuth(bad, BOT_TOKEN, NOW).ok, false);
   }
 });
+
+// --- client IP, hashing concurrency, console mail policy ---------------------------------------------------------
+
+import { clientIp, trustedIpHeader } from "../lib/auth/client-ip.ts";
+import { PasswordHashBusyError, createLimiter } from "../lib/auth/password.ts";
+import { consoleMailAllowed } from "../lib/auth/mail-policy.ts";
+
+const reqWith = (headers) => new Request("http://localhost/", { headers });
+
+test("client IP: no header is trusted unless configured", () => {
+  const spoofed = reqWith({ "x-real-ip": "1.1.1.1", "x-forwarded-for": "2.2.2.2", "x-vercel-forwarded-for": "3.3.3.3" });
+  assert.equal(trustedIpHeader({}), null);
+  assert.equal(clientIp(spoofed, {}), "unknown");
+});
+
+test("client IP: Vercel header only on Vercel, configured header otherwise", () => {
+  assert.equal(clientIp(reqWith({ "x-vercel-forwarded-for": "3.3.3.3", "x-real-ip": "1.1.1.1" }), { VERCEL: "1" }), "3.3.3.3");
+  assert.equal(clientIp(reqWith({ "x-real-ip": "1.1.1.1" }), { TRUSTED_IP_HEADER: "X-Real-IP" }), "1.1.1.1");
+  assert.equal(clientIp(reqWith({}), { TRUSTED_IP_HEADER: "x-real-ip" }), "unknown");
+});
+
+test("client IP: x-forwarded-for uses the right-most (proxy-appended) entry", () => {
+  const req = reqWith({ "x-forwarded-for": "6.6.6.6, 7.7.7.7,  10.0.0.5 " });
+  assert.equal(clientIp(req, { TRUSTED_IP_HEADER: "x-forwarded-for" }), "10.0.0.5");
+});
+
+test("hash limiter: caps concurrency, queues, then refuses", async () => {
+  const run = createLimiter(1, 1);
+  let release;
+  let running = 0;
+  let peak = 0;
+  const task = () =>
+    new Promise((resolve) => {
+      running++;
+      peak = Math.max(peak, running);
+      release = () => {
+        running--;
+        resolve("done");
+      };
+    });
+  const first = run(task);
+  const second = run(task); // queued
+  await assert.rejects(run(task), PasswordHashBusyError);
+  release();
+  assert.equal(await first, "done");
+  await new Promise((r) => setImmediate(r));
+  release();
+  assert.equal(await second, "done");
+  assert.equal(peak, 1);
+  assert.equal(await run(async () => "free again"), "free again");
+});
+
+test("hash limiter: a failing task frees its slot", async () => {
+  const run = createLimiter(1, 0);
+  await assert.rejects(run(async () => { throw new Error("boom"); }), /boom/);
+  assert.equal(await run(async () => 1), 1);
+});
+
+test("console mail: allowed in dev, refused on a real production host", () => {
+  assert.equal(consoleMailAllowed({ NODE_ENV: "development" }), true);
+  assert.equal(consoleMailAllowed({ NODE_ENV: "production" }), false);
+  assert.equal(consoleMailAllowed({ NODE_ENV: "production", MAIL_TRANSPORT: "console" }), false);
+  assert.equal(consoleMailAllowed({ NODE_ENV: "production", MAIL_TRANSPORT: "console", NEXT_PUBLIC_SITE_URL: "https://example.org" }), false);
+  assert.equal(consoleMailAllowed({ NODE_ENV: "production", MAIL_TRANSPORT: "console", NEXT_PUBLIC_SITE_URL: "https://localhost.example.org" }), false);
+  assert.equal(consoleMailAllowed({ NODE_ENV: "production", MAIL_TRANSPORT: "console", NEXT_PUBLIC_SITE_URL: "http://localhost:3000" }), true);
+  assert.equal(consoleMailAllowed({ NODE_ENV: "production", MAIL_TRANSPORT: "console", NEXT_PUBLIC_SITE_URL: "not a url" }), false);
+});

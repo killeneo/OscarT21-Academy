@@ -1,18 +1,22 @@
 import { siteUrl } from "@/lib/site";
 import type { Locale } from "@/lib/i18n";
+import { consoleMailAllowed } from "./mail-policy";
 
 /**
  * Mail transport. No external provider is wired in yet (needs an approved SMTP/API service):
- *  - development (or MAIL_TRANSPORT=console): the message is printed to the server console so links can be followed by hand;
+ *  - development (or a local production check, see consoleMailAllowed): the message is printed to the console;
  *  - production: nothing is sent and an error is logged until a provider is configured.
  */
 export async function sendMail(to: string, subject: string, text: string): Promise<boolean> {
-  // MAIL_TRANSPORT=console lets a production-mode build (next start) print mails too, for local checks.
-  if (process.env.NODE_ENV !== "production" || process.env.MAIL_TRANSPORT === "console") {
+  if (consoleMailAllowed()) {
     console.info(`[mail:dev] to=${to}\nsubject=${subject}\n${text}\n`);
     return true;
   }
-  console.error("mail provider is not configured: e-mail was not sent");
+  console.error(
+    process.env.MAIL_TRANSPORT === "console"
+      ? "MAIL_TRANSPORT=console is refused on a non-local production host: e-mail was not sent"
+      : "mail provider is not configured: e-mail was not sent",
+  );
   return false;
 }
 

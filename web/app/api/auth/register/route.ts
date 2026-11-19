@@ -1,8 +1,9 @@
 import { CONSENT_VERSION, DEFAULT_ROLE, isSelfRole } from "@/lib/auth/config";
 import { clientIp, fail, hasSameOrigin, ok, parseDisplayName, parseEmail, parseLocale, readJson } from "@/lib/auth/http";
 import { sendAccountExistsEmail, sendVerificationEmail } from "@/lib/auth/mailer";
-import { checkPasswordPolicy, hashPassword } from "@/lib/auth/password";
-import { allow } from "@/lib/auth/rate-limit";
+import { trustDevice } from "@/lib/auth/devices";
+import { PasswordHashBusyError, checkPasswordPolicy, hashPassword } from "@/lib/auth/password";
+import { allow, hashKey } from "@/lib/auth/rate-limit";
 import { createSession } from "@/lib/auth/session";
 import { issueToken } from "@/lib/auth/tokens";
 import { createPasswordUser } from "@/lib/auth/users";
@@ -28,9 +29,12 @@ export async function POST(req: Request) {
     const userId = await createPasswordUser({ email, passwordHash: await hashPassword(password), displayName, role, consentVersion: CONSENT_VERSION });
     if (!userId) {
       // Same answer as for a new account, so this form cannot be used to find out which e-mails are registered.
-      // The real owner is told by e-mail; no session is created.
+      // The real owner is told by e-mail; no session is created. At most one such notice per address per day
+      // (silently skipped beyond that), so the form cannot be used to flood someone's inbox.
       try {
-        await sendAccountExistsEmail(email, parseLocale(body?.lang));
+        if (await allow(`register:exists:${hashKey(email)}`, 1, 86400)) {
+          await sendAccountExistsEmail(email, parseLocale(body?.lang));
+        }
       } catch (err) {
         console.error("account-exists e-mail failed:", err instanceof Error ? err.message : "unknown error");
       }
@@ -38,6 +42,7 @@ export async function POST(req: Request) {
     }
 
     await createSession(userId);
+    await trustDevice(userId);
     // E-mail confirmation is best effort: a mail failure must not block the new account.
     try {
       await sendVerificationEmail(email, parseLocale(body?.lang), await issueToken(userId, "verify_email"));
@@ -46,6 +51,7 @@ export async function POST(req: Request) {
     }
     return ok({ user: { email, displayName, role } }, 201);
   } catch (err) {
+    if (err instanceof PasswordHashBusyError) return fail("rate_limited", 503);
     console.error("register failed:", err instanceof Error ? err.message : "unknown error");
     return fail("server_error", 500);
   }

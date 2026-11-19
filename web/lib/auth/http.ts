@@ -39,19 +39,8 @@ export function hasSameOrigin(req: Request): boolean {
   }
 }
 
-/**
- * Best-effort client IP for rate limiting. The LEFT-most X-Forwarded-For entry is written by the client, so it
- * is never trusted: an attacker could rotate it to get a fresh rate-limit bucket on every request. We use the
- * address the hosting platform sets itself, then the RIGHT-most X-Forwarded-For entry (appended by our own
- * proxy). Only meaningful behind a trusted reverse proxy; the per-account limits do not depend on it.
- */
-export function clientIp(req: Request): string {
-  const h = req.headers;
-  const platform = h.get("x-vercel-forwarded-for") ?? h.get("x-real-ip");
-  if (platform?.trim()) return platform.trim().slice(0, 64);
-  const hops = h.get("x-forwarded-for")?.split(",").map((s) => s.trim()).filter(Boolean);
-  return hops?.at(-1)?.slice(0, 64) || "unknown";
-}
+// Client IP for rate limiting: only from a header our own proxy overwrites (see client-ip.ts).
+export { clientIp } from "./client-ip";
 
 const MAX_BODY_CHARS = 8 * 1024;
 

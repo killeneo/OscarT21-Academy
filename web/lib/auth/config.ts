@@ -19,6 +19,9 @@ export const SESSION_COOKIE = isProduction ? "__Host-session" : "session";
 /** Short-lived cookie holding the OAuth state + PKCE verifier. */
 export const GOOGLE_COOKIE = "google_oauth";
 export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 14;
+/** Device cookie: marks a browser that signed in to an account before (rate-limit budget only, not a credential). */
+export const DEVICE_COOKIE = isProduction ? "__Host-device" : "device";
+export const DEVICE_TTL_SECONDS = 60 * 60 * 24 * 180;
 
 export function googleConfig() {
   const clientId = process.env.GOOGLE_CLIENT_ID;

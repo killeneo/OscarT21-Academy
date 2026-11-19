@@ -1,6 +1,6 @@
 import { clientIp, fail, hasSameOrigin, ok, readJson } from "@/lib/auth/http";
 import { db } from "@/lib/auth/db";
-import { checkPasswordPolicy, hashPassword } from "@/lib/auth/password";
+import { PasswordHashBusyError, checkPasswordPolicy, hashPassword } from "@/lib/auth/password";
 import { allow } from "@/lib/auth/rate-limit";
 import { consumeToken, peekToken } from "@/lib/auth/tokens";
 
@@ -19,10 +19,11 @@ export async function POST(req: Request) {
     const policy = checkPasswordPolicy(password, found.email ?? "");
     if (policy) return fail(policy, 400);
 
+    // Hash before using up the token: if hashing is refused as busy, the link still works for a retry.
+    const passwordHash = await hashPassword(password);
     const used = await consumeToken(token, "reset_password");
     if (!used) return fail("invalid_token", 400);
 
-    const passwordHash = await hashPassword(password);
     const client = await db().connect();
     try {
       await client.query("BEGIN");
@@ -32,6 +33,8 @@ export async function POST(req: Request) {
         [used.userId, passwordHash],
       );
       await client.query("DELETE FROM sessions WHERE user_id = $1", [used.userId]);
+      // Browsers remembered before the reset (possibly the attacker's) lose their own login-attempt budget.
+      await client.query("DELETE FROM trusted_devices WHERE user_id = $1", [used.userId]);
       await client.query("COMMIT");
     } catch (err) {
       await client.query("ROLLBACK");
@@ -41,6 +44,7 @@ export async function POST(req: Request) {
     }
     return ok();
   } catch (err) {
+    if (err instanceof PasswordHashBusyError) return fail("rate_limited", 503);
     console.error("reset password failed:", err instanceof Error ? err.message : "unknown error");
     return fail("server_error", 500);
   }
