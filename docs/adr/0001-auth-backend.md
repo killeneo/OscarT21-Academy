@@ -75,7 +75,20 @@ dependency (`pg`).
 - **Onboarding:** after sign-up each role fills a minimal profile (`/onboarding`). A specialist profile is saved as
   `draft` or sent as `submitted`; the client can never set verification status or publish. Document upload and
   the moderator queue are not built yet.
-- **Deployment checklist:** set `TRUSTED_IP_HEADER` (or rely on Vercel), run migrations up to `0008`, set
+- **Settings (`/settings`, all roles):** name (`POST /api/profile/account`), password change
+  (`POST /api/auth/password/change`: current password required, 5 attempts / 15 min per account, then every session
+  and remembered device ends and this browser gets a fresh session; Google/Telegram accounts set a password through
+  recovery), and the role profile (same form and API as onboarding). Once a specialist profile is in review or
+  confirmed, name, specialization and experience stay as reviewed and status/publication are untouched; headline,
+  "about me" (`bio`, migration `0009`, plain text ≤ 2000), city, formats, prices and ages can still change and are
+  visible at once. Rejected or blocked profiles cannot be edited there. Not built yet: child profile (needs a legal
+  basis), photo and documents (need object storage), e-mail change, account deletion.
+- **Specialist profile page (`/[lang]/specialists/[id]`):** signed-in users only, published profiles only (the owner
+  also sees their unpublished one as a preview); never shows contact data or anything from `users`. Hidden, unknown
+  and malformed ids all render Next.js' not-found page with `noindex`; in a production build the status is `200`
+  because the lookup runs after the layout has started streaming (`next dev`: `404`). The route is allowed to block
+  (`instant = false`) because the id segment is runtime data. Contact through a request form is a separate module.
+- **Deployment checklist:** set `TRUSTED_IP_HEADER` (or rely on Vercel), run migrations up to `0009`, set
   `NEXT_PUBLIC_SITE_URL`, keep `MAIL_TRANSPORT` unset on real hosts.
 - Hosting: PostgreSQL and the app must be placed only after the legal data-residency review.
 - Permission matrix for non-auth resources is still to be written before more modules are added.

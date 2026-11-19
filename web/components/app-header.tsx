@@ -9,7 +9,7 @@ type Props = {
   brand: string;
   displayName: string;
   m: Messages;
-  current: "search" | "account";
+  current: "search" | "account" | "settings";
 };
 
 /** Header for the signed-in area: brand, section links, user name and log out. */
@@ -27,6 +27,9 @@ export function AppHeader({ lang, brand, displayName, m, current }: Props) {
           </a>
           <a href={`/${lang}/account`} aria-current={current === "account" ? "page" : undefined}>
             {m.search.navAccount}
+          </a>
+          <a href={`/${lang}/settings`} aria-current={current === "settings" ? "page" : undefined}>
+            {m.search.navSettings}
           </a>
         </nav>
         <div className={styles.appUser}>

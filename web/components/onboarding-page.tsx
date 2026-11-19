@@ -1,16 +1,10 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { db } from "@/lib/auth/db";
 import { getSessionUser } from "@/lib/auth/session";
 import { getMessages, type Locale } from "@/lib/i18n";
-import { listCategories } from "@/lib/search/specialists";
 import { AuthShell } from "./auth-shell";
-import { OnboardingForm, type OnboardingInitial } from "./onboarding-form";
-
-const EMPTY: OnboardingInitial = {
-  city: "", displayName: "", orgName: "", orgType: "", category: "", formats: [],
-  priceFrom: "", priceTo: "", experienceYears: "", ageMin: "", ageMax: "", headline: "",
-};
+import { OnboardingForm } from "./onboarding-form";
+import { loadRoleProfile } from "./role-profile-data";
 
 async function Body({ lang }: { lang: Locale }) {
   const m = getMessages(lang);
@@ -19,37 +13,7 @@ async function Body({ lang }: { lang: Locale }) {
   if (!user) redirect(`/${lang}/login?next=${encodeURIComponent(`/${lang}/onboarding`)}`);
   if (user.role !== "parent" && user.role !== "specialist" && user.role !== "organization") redirect(`/${lang}/account`);
 
-  const initial: OnboardingInitial = { ...EMPTY, displayName: user.displayName };
-  let locked = false;
-  const u = await db().query<{ city: string | null }>("SELECT city FROM users WHERE id = $1", [user.id]);
-  initial.city = u.rows[0]?.city ?? "";
-
-  if (user.role === "organization") {
-    const o = await db().query<{ name: string; org_type: string; city: string }>(
-      "SELECT name, org_type, city FROM organizations WHERE owner_user_id = $1",
-      [user.id],
-    );
-    if (o.rows[0]) Object.assign(initial, { orgName: o.rows[0].name, orgType: o.rows[0].org_type, city: o.rows[0].city });
-  }
-
-  let categories: { slug: string; name: string }[] = [];
-  if (user.role === "specialist") {
-    categories = (await listCategories()).map((c) => ({ slug: c.slug, name: c.name[lang] ?? c.name.ru }));
-    const s = await db().query(
-      `SELECT display_name, category, city, formats, price_from, price_to, experience_years, age_min, age_max, headline, verification_status
-         FROM specialist_profiles WHERE user_id = $1`,
-      [user.id],
-    );
-    const row = s.rows[0];
-    if (row) {
-      Object.assign(initial, {
-        displayName: row.display_name, category: row.category, city: row.city, formats: row.formats,
-        priceFrom: String(row.price_from), priceTo: String(row.price_to), experienceYears: String(row.experience_years),
-        ageMin: String(row.age_min), ageMax: String(row.age_max), headline: row.headline,
-      });
-      locked = !["draft", "needs_documents"].includes(row.verification_status);
-    }
-  }
+  const { initial, lock, categories } = await loadRoleProfile(user, lang);
 
   const titles = {
     parent: [m.onboarding.parentTitle, m.onboarding.parentText],
@@ -68,7 +32,8 @@ async function Body({ lang }: { lang: Locale }) {
         cities={m.search.cities}
         categories={categories}
         initial={initial}
-        locked={locked}
+        lock={lock}
+        mode="onboarding"
         needsVerification={user.role !== "parent" && user.email !== null && !user.emailVerified}
       />
     </AuthShell>

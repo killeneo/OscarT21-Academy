@@ -1,7 +1,17 @@
 // Unit tests for onboarding profile validation. Run: npm test
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseOnboarding } from "../lib/profile/validate.ts";
+import { BIO_MAX, multilineText, parseOnboarding } from "../lib/profile/validate.ts";
+
+test("bio: keeps line breaks (one empty line at most), collapses spaces, refuses control characters", () => {
+  assert.equal(multilineText(undefined, BIO_MAX), "");
+  assert.equal(multilineText("  Hello   world \r\n\r\n\r\n\r\nSecond\tline  ", BIO_MAX), "Hello world\n\nSecond line");
+  assert.equal(multilineText("a\u0000b", BIO_MAX), null);
+  assert.equal(multilineText("a\u001bb", BIO_MAX), null);
+  assert.equal(multilineText(42, BIO_MAX), null);
+  assert.equal(multilineText("я".repeat(BIO_MAX), BIO_MAX)?.length, BIO_MAX);
+  assert.equal(multilineText("я".repeat(BIO_MAX + 1), BIO_MAX), null);
+});
 
 const isCity = (v) => v === "tashkent" || v === "samarkand";
 

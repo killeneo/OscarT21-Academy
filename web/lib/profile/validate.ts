@@ -13,6 +13,7 @@ export type SpecialistInput = {
   ageMin: number;
   ageMax: number;
   headline: string;
+  bio: string;
   submit: boolean;
 };
 export type ParentInput = { city: string };
@@ -33,6 +34,26 @@ function text(value: unknown, min: number, max: number): string | null {
   // Control characters (NUL makes PostgreSQL reject the query) are invalid input, not a server error.
   if (/[\u0000-\u001f\u007f]/.test(v)) return null;
   return v.length >= min && v.length <= max ? v : null;
+}
+
+export const BIO_MAX = 2000;
+
+/**
+ * Multi-line free text ("about me"): line breaks are kept (at most one empty line in a row), every other control
+ * character is refused, spaces inside a line are collapsed. Empty or missing is allowed.
+ */
+export function multilineText(value: unknown, max: number): string | null {
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value !== "string") return null;
+  const v = value
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.replace(/[ \t]+/g, " ").trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  if (/[\u0000-\u0009\u000b-\u001f\u007f]/.test(v)) return null;
+  return [...v].length <= max ? v : null;
 }
 
 function int(value: unknown, min: number, max: number): number | null {
@@ -63,8 +84,9 @@ export function parseOnboarding(role: Role, body: Record<string, unknown>, isCit
     const ageMin = int(body.ageMin, 0, 18);
     const ageMax = int(body.ageMax, 0, 18);
     const headline = body.headline === undefined || body.headline === "" ? "" : text(body.headline, 1, 200);
+    const bio = multilineText(body.bio, BIO_MAX);
     if (
-      !displayName || !category || headline === null ||
+      !displayName || !category || headline === null || bio === null ||
       formats.length === 0 || !formats.every((f) => f === "online" || f === "offline") ||
       priceFrom === null || priceTo === null || priceTo < priceFrom ||
       experienceYears === null || ageMin === null || ageMax === null || ageMax < ageMin
@@ -76,7 +98,7 @@ export function parseOnboarding(role: Role, body: Record<string, unknown>, isCit
       role,
       data: {
         displayName, category, city, formats: formats as SpecialistInput["formats"],
-        priceFrom, priceTo, experienceYears, ageMin, ageMax, headline, submit: body.submit === true,
+        priceFrom, priceTo, experienceYears, ageMin, ageMax, headline, bio, submit: body.submit === true,
       },
     };
   }

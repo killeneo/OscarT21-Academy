@@ -28,14 +28,20 @@ function priceText(c: SpecialistCard, m: M, lang: Locale) {
   return `${text} ${m.currency}`;
 }
 
-function Card({ c, m, lang }: { c: SpecialistCard; m: M; lang: Locale }) {
+function Card({ c, m, lang, back }: { c: SpecialistCard; m: M; lang: Locale; back: string }) {
   const tone = TONES[c.displayName.length % TONES.length];
+  const href = `/${lang}/specialists/${c.id}?${new URLSearchParams({ back })}`;
   return (
     <li className={styles.card}>
       <div className={styles.cardTop}>
         <AvatarFace tone={tone} className={styles.avatar} />
         <div>
-          <h3 className={styles.name}>{c.displayName}</h3>
+          {/* The name is the card's one link; CSS stretches its hit area over the whole card. */}
+          <h3 className={styles.name}>
+            <a href={href} className={styles.cardLink}>
+              {c.displayName}
+            </a>
+          </h3>
           <p className={styles.cat}>{catName(c.categoryName, lang)}</p>
         </div>
       </div>
@@ -259,7 +265,7 @@ export function SpecialistSearch({ lang, m, filters, categories, result, base: b
         ) : (
           <ul className={styles.grid}>
             {result.items.map((c) => (
-              <Card key={c.id} c={c} m={m} lang={lang} />
+              <Card key={c.id} c={c} m={m} lang={lang} back={pageHref(result.page)} />
             ))}
           </ul>
         )}

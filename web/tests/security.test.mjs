@@ -164,7 +164,7 @@ describe("security (black-box)", { skip: !up || !db ? "server or database not re
   });
 
   describe("CSRF / origin checks", () => {
-    const routes = ["/api/auth/login", "/api/auth/register", "/api/auth/register/complete", "/api/auth/logout", "/api/auth/password/forgot", "/api/auth/password/reset", "/api/auth/verify/confirm", "/api/auth/verify/request", "/api/profile/onboarding", "/api/auth/telegram"];
+    const routes = ["/api/auth/login", "/api/auth/register", "/api/auth/register/complete", "/api/auth/logout", "/api/auth/password/forgot", "/api/auth/password/reset", "/api/auth/verify/confirm", "/api/auth/verify/request", "/api/auth/password/change", "/api/profile/onboarding", "/api/profile/account", "/api/auth/telegram"];
     for (const route of routes) {
       test(`${route}: no Origin or a foreign Origin is refused`, async () => {
         const none = await post(route, { email: "a@b.co", password: "x" }, { origin: null });
@@ -717,15 +717,26 @@ describe("security (black-box)", { skip: !up || !db ? "server or database not re
       assert.equal(role.rows[0].role, "specialist");
     });
 
-    test("a submitted profile is locked against edits", async () => {
+    test("a reviewed profile keeps name, specialization, experience and status; rejected or blocked cannot be edited", async () => {
       const spec = await register(uniq(), { role: "specialist" });
-      await verifyEmail(spec.email);
       const p = { displayName: "Spec", category: await categorySlug(), headline: "Hello", city: "tashkent", formats: ["online"], experienceYears: 3, priceFrom: 100000, priceTo: 200000, ageMin: 3, ageMax: 12, submit: true };
       const first = await post("/api/profile/onboarding", p, { cookie: spec.session });
       assert.equal(first.status, 200, first.text);
-      await db.query("UPDATE specialist_profiles SET verification_status = 'confirmed' WHERE user_id = (SELECT id FROM users WHERE email = $1)", [spec.email]);
-      const again = await post("/api/profile/onboarding", { ...p, headline: "Changed after verification" }, { cookie: spec.session });
-      assert.equal(again.status, 409);
+      const owner = "(SELECT id FROM users WHERE email = $1)";
+      await db.query(`UPDATE specialist_profiles SET verification_status = 'confirmed', is_published = true WHERE user_id = ${owner}`, [spec.email]);
+      const edit = { ...p, displayName: "Renamed", experienceYears: 40, headline: "Changed after verification", bio: "Line one\n\n\n\nLine two", priceFrom: 120000, submit: false };
+      const again = await post("/api/profile/onboarding", edit, { cookie: spec.session });
+      assert.equal(again.status, 200, again.text);
+      const { rows } = await db.query(`SELECT display_name, experience_years, headline, bio, price_from, verification_status, is_published FROM specialist_profiles WHERE user_id = ${owner}`, [spec.email]);
+      assert.deepEqual(rows[0], {
+        display_name: "Spec", experience_years: 3, headline: "Changed after verification", bio: "Line one\n\nLine two",
+        price_from: 120000, verification_status: "confirmed", is_published: true,
+      });
+      for (const status of ["rejected", "blocked"]) {
+        await db.query(`UPDATE specialist_profiles SET verification_status = $2, is_published = false WHERE user_id = ${owner}`, [spec.email, status]);
+        const refused = await post("/api/profile/onboarding", { ...edit, headline: "x" }, { cookie: spec.session });
+        assert.equal(refused.status, 409, status);
+      }
     });
 
     test("an unconfirmed e-mail can save a draft but not send it for review or create an organization", async () => {
@@ -768,6 +779,128 @@ describe("security (black-box)", { skip: !up || !db ? "server or database not re
       const viewer = await register();
       const page = await (await fetch(`${BASE}/ru/specialists?q=Zzqx`, { headers: { Cookie: viewer.session } })).text();
       assert.ok(!page.includes("Zzqx Hidden Draft"), "draft/submitted profiles must not be listed");
+    });
+  });
+
+  describe("specialist profile page", () => {
+    /** A specialist with a filled profile; `status` / `published` are then set directly (moderation is not built yet). */
+    async function specialistWith(status, published, extra = {}) {
+      const spec = await register(uniq(), { role: "specialist" });
+      const p = { displayName: `Spec ${randomBytes(3).toString("hex")}`, category: await categorySlug(), headline: "Hello", city: "tashkent", formats: ["online"], experienceYears: 3, priceFrom: 100000, priceTo: 200000, ageMin: 3, ageMax: 12, submit: false, ...extra };
+      assert.equal((await post("/api/profile/onboarding", p, { cookie: spec.session })).status, 200);
+      const { rows } = await db.query(
+        "UPDATE specialist_profiles SET verification_status = $2, is_published = $3 WHERE user_id = (SELECT id FROM users WHERE email = $1) RETURNING id",
+        [spec.email, status, published],
+      );
+      return { ...spec, profileId: rows[0].id, name: p.displayName };
+    }
+    const page = (id, cookie, query = "") => fetch(`${BASE}/ru/specialists/${id}${query}`, { redirect: "manual", headers: cookie ? { Cookie: cookie } : {} });
+
+    test("a published profile is shown to signed-in users, without the owner's e-mail; bio is escaped", async () => {
+      const spec = await specialistWith("confirmed", true, { bio: "<script>alert(1)</script>\nMethods" });
+      const parent = await register();
+      const res = await page(spec.profileId, parent.session);
+      assert.equal(res.status, 200);
+      const html = await res.text();
+      assert.ok(html.includes(spec.name));
+      assert.ok(!html.includes("<script>alert(1)</script>"), "bio must be escaped");
+      assert.ok(!html.includes(spec.email), "the owner's e-mail must never appear");
+      assert.match(res.headers.get("cache-control") ?? "", /no-store/);
+    });
+
+    test("signed-out visitors are sent to log in", async () => {
+      const spec = await specialistWith("confirmed", true);
+      const res = await page(spec.profileId);
+      assert.ok([303, 307, 308].includes(res.status) || (res.status === 200 && (await res.text()).includes("/ru/login")), String(res.status));
+    });
+
+    test("unpublished, rejected, blocked, unknown and malformed ids look the same (not found); the owner gets a preview", async () => {
+      const parent = await register();
+      const draft = await specialistWith("draft", false);
+      // Every hidden case must look exactly like an unknown id. The lookup runs in a streamed part of the page, so a
+      // production build answers 200 with Next.js' not-found page (noindex); `next dev` answers 404.
+      const hidden = async (id, name, label) => {
+        const res = await page(id, parent.session);
+        const html = await res.text();
+        assert.ok(res.status === 404 || (res.status === 200 && html.includes("This page could not be found")), `${label}: ${res.status}`);
+        if (name) assert.ok(!html.includes(name), `${label}: the name must not leak`);
+        assert.match(html, /noindex/, label);
+      };
+      for (const status of ["submitted", "rejected", "blocked"]) {
+        const other = await specialistWith(status, false);
+        await hidden(other.profileId, other.name, status);
+      }
+      await hidden(draft.profileId, draft.name, "someone else's draft");
+      await hidden("00000000-0000-4000-8000-000000000000", null, "unknown id");
+      for (const bad of ["abc", "1%20OR%201=1", "..%2F..%2Fapi"]) await hidden(bad, null, bad);
+      const own = await page(draft.profileId, draft.session);
+      assert.equal(own.status, 200);
+      assert.ok((await own.text()).includes("предпросмотр"), "the owner sees the preview note");
+    });
+
+    test("the back link only goes to the catalog or the account", async () => {
+      const spec = await specialistWith("confirmed", true);
+      const parent = await register();
+      const backHref = async (back) => {
+        const html = await (await page(spec.profileId, parent.session, `?back=${encodeURIComponent(back)}`)).text();
+        return html.match(/<a href="([^"]*)"[^>]*class="[^"]*back/)?.[1];
+      };
+      assert.equal(await backHref("/ru/specialists?city=tashkent&page=2"), "/ru/specialists?city=tashkent&amp;page=2");
+      for (const evil of ["https://evil.example", "//evil.example", "/\\evil.example", "/api/auth/logout", "javascript:alert(1)"]) {
+        assert.equal(await backHref(evil), "/ru", evil);
+      }
+    });
+  });
+
+  describe("account settings", () => {
+    test("the name can be changed for the own account only; other fields are ignored", async () => {
+      const r = await register();
+      const other = await register();
+      const res = await post("/api/profile/account", { displayName: "  New   Name ", role: "admin", email: other.email, id: "x" }, { cookie: r.session });
+      assert.equal(res.status, 200);
+      const { rows } = await db.query("SELECT display_name, role, email FROM users WHERE email = ANY($1) ORDER BY email = $2 DESC", [[r.email, other.email], r.email]);
+      assert.deepEqual(rows[0], { display_name: "New Name", role: "parent", email: r.email });
+      assert.equal(rows[1].display_name, "Test", "another account is untouched");
+      assert.equal((await post("/api/profile/account", { displayName: "a\u0000b" }, { cookie: r.session })).status, 400);
+      assert.equal((await post("/api/profile/account", { displayName: "x".repeat(81) }, { cookie: r.session })).status, 400);
+      assert.equal((await post("/api/profile/account", { displayName: "x" })).status, 401);
+    });
+
+    test("changing the password needs the current one and signs out every other device", async () => {
+      const r = await register();
+      const second = await post("/api/auth/login", { email: r.email, password: PASSWORD });
+      assert.ok(second.session);
+      const NEW = "another long passphrase here";
+      const wrong = await post("/api/auth/password/change", { currentPassword: "not the password", newPassword: NEW }, { cookie: r.session });
+      assert.equal(wrong.status, 403);
+      assert.equal(wrong.json?.error?.code, "invalid_credentials");
+      assert.equal((await post("/api/auth/password/change", { currentPassword: PASSWORD, newPassword: "1234567890" }, { cookie: r.session })).json?.error?.code, "common_password");
+      assert.equal((await post("/api/auth/password/change", { currentPassword: PASSWORD, newPassword: NEW })).status, 401, "a session is required");
+
+      const ok = await post("/api/auth/password/change", { currentPassword: PASSWORD, newPassword: NEW }, { cookie: r.session });
+      assert.equal(ok.status, 200, ok.text);
+      assert.ok(ok.session && ok.session !== r.session, "this browser gets a fresh session");
+      const me = (cookie) => fetch(`${BASE}/api/auth/me`, { headers: { Cookie: cookie } }).then((x) => x.status);
+      assert.equal(await me(second.session), 401, "other devices are signed out");
+      assert.equal(await me(r.session), 401, "the old session id is gone too");
+      assert.equal(await me(ok.session), 200);
+      assert.equal((await post("/api/auth/login", { email: r.email, password: PASSWORD })).status, 401);
+      assert.equal((await post("/api/auth/login", { email: r.email, password: NEW })).status, 200);
+    });
+
+    test("password-change guesses are rate limited per account", async () => {
+      await resetLimits();
+      const r = await register();
+      const codes = [];
+      for (let i = 0; i < 7; i++) codes.push((await post("/api/auth/password/change", { currentPassword: `wrong guess ${i}`, newPassword: "irrelevant passphrase" }, { cookie: r.session })).status);
+      assert.ok(codes.includes(429), codes.join(","));
+    });
+
+    test("settings and profile pages require a session", async () => {
+      for (const p of ["/ru/settings"]) {
+        const res = await fetch(BASE + p, { redirect: "manual" });
+        assert.ok([303, 307, 308].includes(res.status) || (res.status === 200 && (await res.text()).includes("/ru/login")), `${p} -> ${res.status}`);
+      }
     });
   });
 

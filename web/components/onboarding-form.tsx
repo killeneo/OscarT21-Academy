@@ -19,7 +19,14 @@ export type OnboardingInitial = {
   ageMin: string;
   ageMax: string;
   headline: string;
+  bio: string;
 };
+
+/**
+ * none: everything editable (draft). partial: in review or confirmed, so name, specialization and experience stay as
+ * reviewed (the server ignores changes to them). full: rejected or blocked, nothing can be changed here.
+ */
+export type ProfileLock = "none" | "partial" | "full";
 
 type Props = {
   role: "parent" | "specialist" | "organization";
@@ -29,7 +36,9 @@ type Props = {
   cities: Record<string, string>;
   categories: { slug: string; name: string }[];
   initial: OnboardingInitial;
-  locked: boolean;
+  lock: ProfileLock;
+  /** onboarding: first fill-in, then continue to the next page. settings: save in place and stay. */
+  mode: "onboarding" | "settings";
   /** E-mail not confirmed yet: sending for review / saving an organization is refused by the server. */
   needsVerification: boolean;
 };
@@ -39,12 +48,14 @@ const intOrEmpty = (v: FormDataEntryValue | null) => {
   return s === "" ? undefined : Number(s);
 };
 
-export function OnboardingForm({ role, lang, m, auth, cities, categories, initial, locked, needsVerification }: Props) {
+export function OnboardingForm({ role, lang, m, auth, cities, categories, initial, lock, mode, needsVerification }: Props) {
   const router = useRouter();
   const uid = useId();
   const [formats, setFormats] = useState<string[]>(initial.formats.length ? initial.formats : ["online"]);
   const [pending, setPending] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const partial = lock === "partial";
 
   async function save(formEl: HTMLFormElement, submit: boolean) {
     const form = new FormData(formEl);
@@ -55,20 +66,23 @@ export function OnboardingForm({ role, lang, m, auth, cities, categories, initia
     }
     if (role === "specialist") {
       Object.assign(payload, {
-        displayName: String(form.get("displayName") ?? ""),
-        category: String(form.get("category") ?? ""),
+        // Reviewed fields are shown read-only while in review / confirmed; the stored values are sent back.
+        displayName: partial ? initial.displayName : String(form.get("displayName") ?? ""),
+        category: partial ? initial.category : String(form.get("category") ?? ""),
+        experienceYears: partial ? Number(initial.experienceYears) : intOrEmpty(form.get("experienceYears")),
         formats,
         priceFrom: intOrEmpty(form.get("priceFrom")),
         priceTo: intOrEmpty(form.get("priceTo")),
-        experienceYears: intOrEmpty(form.get("experienceYears")),
         ageMin: intOrEmpty(form.get("ageMin")),
         ageMax: intOrEmpty(form.get("ageMax")),
         headline: String(form.get("headline") ?? ""),
+        bio: String(form.get("bio") ?? ""),
         submit,
       });
     }
     setPending(true);
     setError(null);
+    setSaved(false);
     try {
       const res = await fetch("/api/profile/onboarding", {
         method: "POST",
@@ -77,7 +91,11 @@ export function OnboardingForm({ role, lang, m, auth, cities, categories, initia
       });
       const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: { code?: string } } | null;
       if (res.ok && data?.ok) {
-        router.replace(role === "parent" ? `/${lang}` : `/${lang}/account`);
+        if (mode === "settings") {
+          setSaved(true);
+        } else {
+          router.replace(role === "parent" ? `/${lang}` : `/${lang}/account`);
+        }
         router.refresh();
         return;
       }
@@ -89,7 +107,8 @@ export function OnboardingForm({ role, lang, m, auth, cities, categories, initia
     }
   }
 
-  const errorText = error ? (auth.errors[error as keyof typeof auth.errors] ?? auth.errors.server_error) : null;
+  // Own keys only: "constructor" or "toString" must not count as known error codes.
+  const errorText = error ? (Object.hasOwn(auth.errors, error) ? auth.errors[error as keyof typeof auth.errors] : auth.errors.server_error) : null;
   const toggleFormat = (f: string) => setFormats((cur) => (cur.includes(f) ? cur.filter((x) => x !== f) : [...cur, f]));
 
   return (
@@ -100,9 +119,15 @@ export function OnboardingForm({ role, lang, m, auth, cities, categories, initia
             {errorText}
           </p>
         ) : null}
-        {locked ? <p className={styles.notice}>{m.locked}</p> : null}
+        {saved ? (
+          <p className={styles.notice} role="status">
+            {m.saved}
+          </p>
+        ) : null}
+        {lock === "full" ? <p className={styles.notice}>{m.locked}</p> : null}
+        {partial ? <p className={styles.notice}>{m.lockedPartial}</p> : null}
       </div>
-      {needsVerification && !locked ? (
+      {needsVerification && lock === "none" ? (
         <div className={styles.notice} id={`${uid}-verify`}>
           <p style={{ margin: "0 0 8px" }}>{role === "organization" ? m.verifyFirstOrg : m.verifyFirstSpec}</p>
           <ResendVerification lang={lang} label={m.resend} doneLabel={m.resent} errorLabel={auth.errors.rate_limited} compact />
@@ -116,7 +141,7 @@ export function OnboardingForm({ role, lang, m, auth, cities, categories, initia
           void save(e.currentTarget, false);
         }}
       >
-        <fieldset disabled={locked || pending} style={{ display: "grid", gap: 18, border: 0, padding: 0, margin: 0 }}>
+        <fieldset disabled={lock === "full" || pending} style={{ display: "grid", gap: 18, border: 0, padding: 0, margin: 0 }}>
           {role === "organization" ? (
             <>
               <div className={styles.field}>
@@ -140,11 +165,11 @@ export function OnboardingForm({ role, lang, m, auth, cities, categories, initia
             <>
               <div className={styles.field}>
                 <label htmlFor={`${uid}-dn`}>{m.displayName}</label>
-                <input id={`${uid}-dn`} name="displayName" className={styles.input} defaultValue={initial.displayName} maxLength={120} required />
+                <input id={`${uid}-dn`} name="displayName" className={styles.input} defaultValue={initial.displayName} maxLength={120} disabled={partial} required />
               </div>
               <div className={styles.field}>
                 <label htmlFor={`${uid}-cat`}>{m.category}</label>
-                <select id={`${uid}-cat`} name="category" className={styles.input} defaultValue={initial.category} required>
+                <select id={`${uid}-cat`} name="category" className={styles.input} defaultValue={initial.category} disabled={partial} required>
                   <option value="" disabled>
                     {m.selectCategory}
                   </option>
@@ -208,7 +233,7 @@ export function OnboardingForm({ role, lang, m, auth, cities, categories, initia
 
               <div className={styles.field}>
                 <label htmlFor={`${uid}-exp`}>{m.experience}</label>
-                <input id={`${uid}-exp`} name="experienceYears" type="number" inputMode="numeric" min={0} max={70} className={styles.input} defaultValue={initial.experienceYears || "0"} required />
+                <input id={`${uid}-exp`} name="experienceYears" type="number" inputMode="numeric" min={0} max={70} className={styles.input} defaultValue={initial.experienceYears || "0"} disabled={partial} required />
               </div>
 
               <div className={styles.field}>
@@ -218,11 +243,25 @@ export function OnboardingForm({ role, lang, m, auth, cities, categories, initia
                   {m.headlineHint}
                 </p>
               </div>
+
+              <div className={styles.field}>
+                <label htmlFor={`${uid}-bio`}>
+                  {m.bio} <span className={styles.optional}>({auth.nameOptional})</span>
+                </label>
+                <textarea id={`${uid}-bio`} name="bio" className={styles.input} style={{ minHeight: 160, padding: 14, resize: "vertical" }} defaultValue={initial.bio} maxLength={2000} aria-describedby={`${uid}-bioh`} />
+                <p id={`${uid}-bioh`} className={styles.hint}>
+                  {m.bioHint}
+                </p>
+              </div>
             </>
           ) : null}
 
           <div className={styles.actionsRow}>
-            {role === "specialist" ? (
+            {role === "specialist" && partial ? (
+              <button type="submit" className={styles.submit}>
+                {pending ? m.saving : m.save}
+              </button>
+            ) : role === "specialist" ? (
               <>
                 <button
                   type="button"
@@ -251,9 +290,11 @@ export function OnboardingForm({ role, lang, m, auth, cities, categories, initia
                 {pending ? m.saving : m.save}
               </button>
             )}
-            <a className={styles.forgot} style={{ justifySelf: "center" }} href={role === "parent" ? `/${lang}` : `/${lang}/account`}>
-              {m.later}
-            </a>
+            {mode === "onboarding" ? (
+              <a className={styles.forgot} style={{ justifySelf: "center" }} href={role === "parent" ? `/${lang}` : `/${lang}/account`}>
+                {m.later}
+              </a>
+            ) : null}
           </div>
         </fieldset>
       </form>

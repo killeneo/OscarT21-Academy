@@ -203,7 +203,9 @@ async function AccountBody({ lang }: { lang: Locale }) {
                         <div className={styles.nearTop}>
                           <AvatarFace tone={(["gold", "teal", "emerald"] as const)[i % 3]} className={styles.nearAvatar} />
                           <div>
-                            <p className={styles.nearName}>{r.display_name}</p>
+                            <p className={styles.nearName}>
+                              <a href={`/${lang}/specialists/${r.id}?${new URLSearchParams({ back: `/${lang}/account` })}`}>{r.display_name}</a>
+                            </p>
                             <p className={styles.nearMeta}>{r.category_name[lang] ?? r.category_name.ru}</p>
                           </div>
                         </div>
@@ -264,7 +266,7 @@ async function AccountBody({ lang }: { lang: Locale }) {
             </dl>
             <div className={styles.asideActions}>
               {isSelf ? (
-                <a className={styles.outlineBtn} href={`/${lang}/onboarding`}>
+                <a className={styles.outlineBtn} href={user.onboardingCompleted ? `/${lang}/settings` : `/${lang}/onboarding`}>
                   {user.onboardingCompleted ? o.editProfile : o.fillProfile}
                 </a>
               ) : null}
