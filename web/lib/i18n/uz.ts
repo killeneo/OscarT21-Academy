@@ -173,6 +173,8 @@ export const uz: Messages = {
     google: "Google bilan davom etiş",
     telegram: "Telegram orqali kiriş",
     telegramNotConfigured: "Telegram orqali kiriş hali sozlanmagan",
+    telegramTitle: "Telegram orqali kiriş",
+    telegramText: "Telegram oynasida tasdiqlań. Biz faqat ismińiz va Telegram akkaunt identifikatorini olamiz, telefon raqamini emas.",
     noAccount: "Akkauntińiz yóqmi?",
     createAccount: "Yaratiş",
     haveAccount: "Akkauntińiz bormi?",

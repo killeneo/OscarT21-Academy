@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { CONSENT_VERSION, DEFAULT_ROLE, GOOGLE_COOKIE, googleConfig, isProduction, isSelfRole, type SelfRole } from "@/lib/auth/config";
-import { clientIp, parseLocale, safeNextPath } from "@/lib/auth/http";
-import { allow } from "@/lib/auth/rate-limit";
+import { parseLocale, safeNextPath } from "@/lib/auth/http";
+import { allowPerIp } from "@/lib/auth/rate-limit";
 import { createSession } from "@/lib/auth/session";
 import { findOrCreateOAuthUser } from "@/lib/auth/users";
 import { siteUrl } from "@/lib/site";
@@ -44,7 +44,7 @@ export async function GET(req: Request) {
   if (!pending || !code || !state || state !== pending.state) return toLogin("google_failed");
 
   try {
-    if (!(await allow(`google:ip:${clientIp(req)}`, 30, 900))) return toLogin("rate_limited");
+    if (!(await allowPerIp(req, "google", 30, 900))) return toLogin("rate_limited");
 
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",

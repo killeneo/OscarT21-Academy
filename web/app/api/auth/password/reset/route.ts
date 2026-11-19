@@ -1,14 +1,14 @@
-import { clientIp, fail, hasSameOrigin, ok, readJson } from "@/lib/auth/http";
+import { fail, hasSameOrigin, ok, readJson } from "@/lib/auth/http";
 import { db } from "@/lib/auth/db";
 import { PasswordHashBusyError, checkPasswordPolicy, hashPassword } from "@/lib/auth/password";
-import { allow } from "@/lib/auth/rate-limit";
+import { allowPerIp } from "@/lib/auth/rate-limit";
 import { consumeToken, peekToken } from "@/lib/auth/tokens";
 
 /** Sets a new password from a reset link. All existing sessions of the account are revoked. */
 export async function POST(req: Request) {
   try {
     if (!hasSameOrigin(req)) return fail("forbidden_origin", 403);
-    if (!(await allow(`reset:ip:${clientIp(req)}`, 20, 3600))) return fail("rate_limited", 429);
+    if (!(await allowPerIp(req, "reset", 20, 3600))) return fail("rate_limited", 429);
     const body = await readJson(req);
     const token = typeof body?.token === "string" ? body.token : "";
     const password = typeof body?.password === "string" ? body.password : null;

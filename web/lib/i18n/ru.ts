@@ -171,6 +171,8 @@ export const ru = {
     google: "Продолжить с Google",
     telegram: "Войти через Telegram",
     telegramNotConfigured: "Вход через Telegram пока не настроен",
+    telegramTitle: "Вход через Telegram",
+    telegramText: "Подтвердите вход в окне Telegram. Мы получим только имя и идентификатор аккаунта Telegram, без номера телефона.",
     noAccount: "Нет аккаунта?",
     createAccount: "Создать",
     haveAccount: "Уже есть аккаунт?",

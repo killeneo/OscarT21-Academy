@@ -1,9 +1,10 @@
 import { CONSENT_VERSION, DEFAULT_ROLE, isSelfRole } from "@/lib/auth/config";
-import { clientIp, fail, hasSameOrigin, ok, parseDisplayName, parseEmail, parseLocale, readJson } from "@/lib/auth/http";
+import { fail, hasSameOrigin, ok, parseDisplayName, parseEmail, parseLocale, readJson } from "@/lib/auth/http";
 import { sendAccountExistsEmail, sendVerificationEmail } from "@/lib/auth/mailer";
+import { afterResponse } from "@/lib/auth/background";
 import { trustDevice } from "@/lib/auth/devices";
 import { PasswordHashBusyError, checkPasswordPolicy, hashPassword } from "@/lib/auth/password";
-import { allow, hashKey } from "@/lib/auth/rate-limit";
+import { allow, allowPerIp, hashKey } from "@/lib/auth/rate-limit";
 import { createSession } from "@/lib/auth/session";
 import { issueToken } from "@/lib/auth/tokens";
 import { createPasswordUser } from "@/lib/auth/users";
@@ -11,7 +12,7 @@ import { createPasswordUser } from "@/lib/auth/users";
 export async function POST(req: Request) {
   try {
     if (!hasSameOrigin(req)) return fail("forbidden_origin", 403);
-    if (!(await allow(`register:ip:${clientIp(req)}`, 10, 3600))) return fail("rate_limited", 429);
+    if (!(await allowPerIp(req, "register", 10, 3600))) return fail("rate_limited", 429);
 
     const body = await readJson(req);
     const email = parseEmail(body?.email);
@@ -30,25 +31,20 @@ export async function POST(req: Request) {
     if (!userId) {
       // Same answer as for a new account, so this form cannot be used to find out which e-mails are registered.
       // The real owner is told by e-mail; no session is created. At most one such notice per address per day
-      // (silently skipped beyond that), so the form cannot be used to flood someone's inbox.
-      try {
-        if (await allow(`register:exists:${hashKey(email)}`, 1, 86400)) {
-          await sendAccountExistsEmail(email, parseLocale(body?.lang));
-        }
-      } catch (err) {
-        console.error("account-exists e-mail failed:", err instanceof Error ? err.message : "unknown error");
-      }
+      // (silently skipped beyond that), so the form cannot be used to flood someone's inbox. Sent after the
+      // response so its duration does not tell the two cases apart.
+      const lang = parseLocale(body?.lang);
+      afterResponse("account-exists e-mail", async () => {
+        if (await allow(`register:exists:${hashKey(email)}`, 1, 86400)) await sendAccountExistsEmail(email, lang);
+      });
       return ok({ user: { email, displayName, role } }, 201);
     }
 
     await createSession(userId);
     await trustDevice(userId);
-    // E-mail confirmation is best effort: a mail failure must not block the new account.
-    try {
-      await sendVerificationEmail(email, parseLocale(body?.lang), await issueToken(userId, "verify_email"));
-    } catch (err) {
-      console.error("verification e-mail failed:", err instanceof Error ? err.message : "unknown error");
-    }
+    // E-mail confirmation is best effort and runs after the response: a mail failure must not block the account.
+    const lang = parseLocale(body?.lang);
+    afterResponse("verification e-mail", async () => sendVerificationEmail(email, lang, await issueToken(userId, "verify_email")));
     return ok({ user: { email, displayName, role } }, 201);
   } catch (err) {
     if (err instanceof PasswordHashBusyError) return fail("rate_limited", 503);

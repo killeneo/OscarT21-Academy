@@ -1,8 +1,22 @@
 import { createHash } from "node:crypto";
+import { clientIp } from "./client-ip";
 import { db } from "./db";
+
+/**
+ * Per-client-IP limit for `scope`. Always allowed when per-IP limits are switched off (TRUSTED_IP_HEADER=none);
+ * throws TrustedProxyConfigError on a production server whose IP source is not configured (see client-ip.ts).
+ */
+export async function allowPerIp(req: Request, scope: string, limit: number, windowSeconds: number): Promise<boolean> {
+  const ip = clientIp(req);
+  return ip === null ? true : allow(`${scope}:ip:${ip}`, limit, windowSeconds);
+}
 
 /** Fixed-window counter in Postgres (works across instances). Returns true while under the limit. */
 export async function allow(key: string, limit: number, windowSeconds: number): Promise<boolean> {
+  // Expired windows are dead weight; prune them now and then (not a security decision, so Math.random is fine).
+  if (Math.random() < 0.01) {
+    await db().query("DELETE FROM rate_limits WHERE reset_at < now() - interval '1 day'");
+  }
   const { rows } = await db().query<{ count: number }>(
     `INSERT INTO rate_limits (key, count, reset_at) VALUES ($1, 1, now() + make_interval(secs => $2))
      ON CONFLICT (key) DO UPDATE SET

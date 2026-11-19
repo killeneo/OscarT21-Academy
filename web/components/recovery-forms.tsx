@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import type { Messages } from "@/lib/i18n";
 import styles from "./auth.module.css";
 
@@ -14,6 +14,19 @@ async function postJson(url: string, payload: Record<string, unknown>) {
   } catch {
     return { ok: false as const, code: "network" };
   }
+}
+
+/**
+ * The single-use token arrives in the e-mailed link (?token=…). Once the page has it, drop it from the address bar
+ * so it does not stay in browser history, synced history or screenshots. The form keeps it in memory.
+ */
+function useStripTokenFromUrl() {
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("token")) return;
+    url.searchParams.delete("token");
+    window.history.replaceState(window.history.state, "", url.pathname + url.search + url.hash);
+  }, []);
 }
 
 function ErrorBox({ m, code }: { m: Messages["auth"]; code: string | null }) {
@@ -86,6 +99,7 @@ export function ResetForm({ lang, m, r, token }: Props & { token: string }) {
   const [done, setDone] = useState(false);
   const [show, setShow] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useStripTokenFromUrl();
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -152,6 +166,7 @@ export function VerifyConfirm({ lang, m, r, token }: Props & { token: string }) 
   const [pending, setPending] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useStripTokenFromUrl();
 
   async function confirm() {
     setPending(true);

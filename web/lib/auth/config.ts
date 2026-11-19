@@ -22,6 +22,10 @@ export const SESSION_COOKIE = isProduction ? "__Host-session" : "session";
  */
 export const GOOGLE_COOKIE = isProduction ? "__Host-google_oauth" : "google_oauth";
 export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 14;
+/** A session not used for this long ends even before SESSION_TTL_SECONDS (absolute lifetime). */
+export const SESSION_IDLE_SECONDS = 60 * 60 * 24 * 7;
+/** `last_seen_at` is written at most this often, so ordinary page views do not each cost a database write. */
+export const SESSION_TOUCH_SECONDS = 60 * 10;
 /** Device cookie: marks a browser that signed in to an account before (rate-limit budget only, not a credential). */
 export const DEVICE_COOKIE = isProduction ? "__Host-device" : "device";
 export const DEVICE_TTL_SECONDS = 60 * 60 * 24 * 180;

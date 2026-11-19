@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
-import { SESSION_COOKIE, SESSION_TTL_SECONDS, isProduction } from "./config";
+import { SESSION_COOKIE, SESSION_IDLE_SECONDS, SESSION_TOUCH_SECONDS, SESSION_TTL_SECONDS, isProduction } from "./config";
 import { db } from "./db";
 
 export type SessionUser = {
@@ -31,18 +31,24 @@ export async function createSession(userId: string): Promise<void> {
   });
 }
 
-/** Returns the signed-in, active user or null. Safe to call from server components and route handlers. */
+/**
+ * Returns the signed-in, active user or null. Safe to call from server components and route handlers.
+ * A session ends at its absolute expiry or after SESSION_IDLE_SECONDS without use, whichever comes first.
+ */
 export async function getSessionUser(): Promise<SessionUser | null> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token || token.length > 200) return null;
   const { rows } = await db().query(
-    `SELECT u.id, u.email, u.display_name, u.role, u.email_verified_at, u.onboarding_completed_at
+    `SELECT s.id AS session_id, (s.last_seen_at < now() - make_interval(secs => $3)) AS stale,
+            u.id, u.email, u.display_name, u.role, u.email_verified_at, u.onboarding_completed_at
        FROM sessions s JOIN users u ON u.id = s.user_id
-      WHERE s.token_hash = $1 AND s.expires_at > now() AND u.status = 'active'`,
-    [sha256(token)],
+      WHERE s.token_hash = $1 AND s.expires_at > now() AND s.last_seen_at > now() - make_interval(secs => $2)
+        AND u.status = 'active'`,
+    [sha256(token), SESSION_IDLE_SECONDS, SESSION_TOUCH_SECONDS],
   );
   const row = rows[0];
   if (!row) return null;
+  if (row.stale) await db().query("UPDATE sessions SET last_seen_at = now() WHERE id = $1", [row.session_id]);
   return {
     id: row.id,
     email: row.email,

@@ -1,6 +1,6 @@
 import { CONSENT_VERSION, DEFAULT_ROLE, isSelfRole, telegramConfig } from "@/lib/auth/config";
-import { clientIp, fail, hasSameOrigin, ok, readJson } from "@/lib/auth/http";
-import { allow, claimOnce } from "@/lib/auth/rate-limit";
+import { fail, hasSameOrigin, ok, readJson } from "@/lib/auth/http";
+import { allowPerIp, claimOnce } from "@/lib/auth/rate-limit";
 import { createSession } from "@/lib/auth/session";
 import { verifyTelegramAuth } from "@/lib/auth/telegram";
 import { findOrCreateOAuthUser } from "@/lib/auth/users";
@@ -10,7 +10,7 @@ export async function POST(req: Request) {
     if (!hasSameOrigin(req)) return fail("forbidden_origin", 403);
     const config = telegramConfig();
     if (!config) return fail("not_configured", 501);
-    if (!(await allow(`telegram:ip:${clientIp(req)}`, 30, 900))) return fail("rate_limited", 429);
+    if (!(await allowPerIp(req, "telegram", 30, 900))) return fail("rate_limited", 429);
 
     const body = await readJson(req);
     const role = body?.role === undefined ? DEFAULT_ROLE : body.role;

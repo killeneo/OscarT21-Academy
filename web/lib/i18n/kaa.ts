@@ -173,6 +173,8 @@ export const kaa: Messages = {
     google: "Google menen dawam etiw",
     telegram: "Telegram arqalı kiriw",
     telegramNotConfigured: "Telegram arqalı kiriw áli sazlanbaǵan",
+    telegramTitle: "Telegram arqalı kiriw",
+    telegramText: "Telegram aynasında tastıyıqlań. Biz tek atıńızdı hám Telegram akkaunt identifikatorın alamız, telefon nomerin emes.",
     noAccount: "Akkauntıńız joqpa?",
     createAccount: "Jaratıw",
     haveAccount: "Akkauntıńız barma?",

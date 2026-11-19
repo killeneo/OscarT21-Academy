@@ -172,6 +172,8 @@ export const en: Messages = {
     google: "Continue with Google",
     telegram: "Log in with Telegram",
     telegramNotConfigured: "Telegram login is not set up yet",
+    telegramTitle: "Sign in with Telegram",
+    telegramText: "Confirm in the Telegram window. We only receive your name and Telegram account ID, not your phone number.",
     noAccount: "No account yet?",
     createAccount: "Create one",
     haveAccount: "Already have an account?",

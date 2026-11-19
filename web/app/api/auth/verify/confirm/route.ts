@@ -1,13 +1,13 @@
-import { clientIp, fail, hasSameOrigin, ok, readJson } from "@/lib/auth/http";
+import { fail, hasSameOrigin, ok, readJson } from "@/lib/auth/http";
 import { db } from "@/lib/auth/db";
-import { allow } from "@/lib/auth/rate-limit";
+import { allowPerIp } from "@/lib/auth/rate-limit";
 import { consumeToken } from "@/lib/auth/tokens";
 
 /** Confirms an e-mail address. POST (not GET) so link scanners that prefetch URLs cannot use up the token. */
 export async function POST(req: Request) {
   try {
     if (!hasSameOrigin(req)) return fail("forbidden_origin", 403);
-    if (!(await allow(`verify-confirm:ip:${clientIp(req)}`, 30, 900))) return fail("rate_limited", 429);
+    if (!(await allowPerIp(req, "verify-confirm", 30, 900))) return fail("rate_limited", 429);
     const body = await readJson(req);
     const token = typeof body?.token === "string" ? body.token : "";
     const used = await consumeToken(token, "verify_email");

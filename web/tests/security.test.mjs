@@ -66,6 +66,11 @@ async function register(email = uniq(), extra = {}) {
   return { email, ...r };
 }
 
+// Tell the suite how the server is configured (TRUSTED_IP_HEADER, as set on the server). Behind a trusted proxy that
+// header and X-Forwarded-Host are overwritten by the proxy, so a client cannot spoof them; "none" means the server
+// has per-IP limits switched off.
+const trustedIp = (process.env.TRUSTED_IP_HEADER ?? "").trim().toLowerCase();
+const behindProxy = trustedIp !== "" && trustedIp !== "none";
 const resetLimits = () => db?.query("DELETE FROM rate_limits");
 const verifyEmail = (email) => db.query("UPDATE users SET email_verified_at = now() WHERE email = $1", [email]);
 /** A specialization slug that exists in this database (fixtures differ per DB). */
@@ -100,6 +105,20 @@ describe("security (black-box)", { skip: !up || !db ? "server or database not re
       assert.doesNotMatch(script, /\*|https?:\/\/(?!telegram\.org)/);
     });
 
+    test("no third-party script on the login and sign-up pages; Telegram only on its own page", async () => {
+      for (const p of ["/ru/login", "/ru/register"]) {
+        const res = await fetch(BASE + p);
+        const html = await res.text();
+        assert.ok(!/telegram\.org/.test(res.headers.get("content-security-policy") ?? ""), `${p} CSP must not allow telegram.org`);
+        assert.ok(!html.includes("telegram-widget.js"), `${p} must not load the Telegram widget`);
+        assert.match(res.headers.get("cross-origin-opener-policy") ?? "", /^same-origin$/);
+      }
+      const tg = await fetch(`${BASE}/ru/telegram?mode=login`);
+      assert.equal(tg.status, 200);
+      assert.match(tg.headers.get("content-security-policy") ?? "", /script-src [^;]*https:\/\/telegram\.org/);
+      assert.ok(!/type="password"/.test(await tg.text()), "the Telegram page has no password field");
+    });
+
     test("API responses are never cached", async () => {
       const r = await post("/api/auth/login", { email: "nobody@x.invalid", password: "x" });
       assert.match(r.headers.get("cache-control") ?? "", /no-store/);
@@ -125,6 +144,11 @@ describe("security (black-box)", { skip: !up || !db ? "server or database not re
         assert.equal(lookalike.status, 403);
       });
     }
+
+    test("a foreign Origin cannot be legitimised with a matching X-Forwarded-Host", { skip: behindProxy && "the proxy overwrites X-Forwarded-Host on this server" }, async () => {
+      const res = await post("/api/auth/login", { email: uniq(), password: "x".repeat(12) }, { origin: "http://evil.example", headers: { "X-Forwarded-Host": "evil.example" } });
+      assert.equal(res.status, 403);
+    });
 
     test("a cross-site form post (text/plain) cannot log a victim in or out", async () => {
       const r = await post("/api/auth/logout", null, { raw: "{}", headers: { "Content-Type": "text/plain" }, origin: "https://evil.example" });
@@ -352,6 +376,18 @@ describe("security (black-box)", { skip: !up || !db ? "server or database not re
       assert.equal((await post("/api/auth/logout-all", {}, { cookie: stranger.session, origin: "https://evil.example" })).status, 403);
     });
 
+    test("an idle session expires before its absolute lifetime; use keeps it alive", async () => {
+      await resetLimits();
+      const r = await register();
+      const tokenHash = sha256(r.session.split("=")[1]);
+      await db.query("UPDATE sessions SET last_seen_at = now() - interval '20 minutes' WHERE token_hash = $1", [tokenHash]);
+      assert.equal((await fetch(`${BASE}/api/auth/me`, { headers: { Cookie: r.session } })).status, 200);
+      const touched = await db.query("SELECT last_seen_at > now() - interval '1 minute' AS fresh FROM sessions WHERE token_hash = $1", [tokenHash]);
+      assert.equal(touched.rows[0].fresh, true, "use refreshes last_seen_at");
+      await db.query("UPDATE sessions SET last_seen_at = now() - interval '8 days' WHERE token_hash = $1", [tokenHash]);
+      assert.equal((await fetch(`${BASE}/api/auth/me`, { headers: { Cookie: r.session } })).status, 401);
+    });
+
     test("every login issues a fresh token (no session fixation)", async () => {
       await resetLimits();
       const r = await register();
@@ -404,17 +440,18 @@ describe("security (black-box)", { skip: !up || !db ? "server or database not re
       assert.equal((await post("/api/auth/login", { email: other.email, password: PASSWORD }, { cookie: device })).status, 429);
     });
 
-    test("spoofed client-IP headers do not give a fresh per-IP budget", async () => {
+    test("spoofed client-IP headers do not give a fresh per-IP budget", { skip: trustedIp === "none" && "per-IP limits are off on this server" }, async () => {
       await resetLimits();
       const codes = [];
       for (let i = 0; i < 14; i++) {
         const ip = `198.51.100.${i + 1}`;
-        codes.push((await post("/api/auth/password/forgot", { email: uniq() }, { headers: { "X-Real-IP": ip, "X-Forwarded-For": ip, "X-Vercel-Forwarded-For": ip } })).status);
+        const spoofed = Object.fromEntries(["x-real-ip", "x-forwarded-for", "x-vercel-forwarded-for"].filter((h) => h !== trustedIp).map((h) => [h, ip]));
+        codes.push((await post("/api/auth/password/forgot", { email: uniq() }, { headers: spoofed })).status);
       }
       assert.ok(codes.includes(429), codes.join(","));
     });
 
-    test("registration and password-reset requests are rate limited per client", async () => {
+    test("registration and password-reset requests are rate limited per client", { skip: trustedIp === "none" && "per-IP limits are off on this server" }, async () => {
       await resetLimits();
       const codes = [];
       for (let i = 0; i < 14; i++) codes.push((await post("/api/auth/password/forgot", { email: uniq() })).status);
@@ -474,6 +511,19 @@ describe("security (black-box)", { skip: !up || !db ? "server or database not re
       assert.equal((await post("/api/auth/password/reset", { token: first, password: "a brand new passphrase" })).status, 200);
       assert.equal((await post("/api/auth/password/reset", { token: second, password: "another new passphrase" })).status, 400, "other links die with the reset");
       assert.equal((await db.query("SELECT 1 FROM email_tokens WHERE user_id = $1 AND purpose = 'reset_password' AND used_at IS NULL", [id])).rowCount, 0);
+    });
+
+    test("the reset e-mail is still issued after the response is sent", async () => {
+      await resetLimits();
+      const r = await register();
+      const id = await idOf(r.email);
+      assert.equal((await post("/api/auth/password/forgot", { email: r.email })).status, 200);
+      let issued = 0;
+      for (let i = 0; i < 20 && issued === 0; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        issued = (await db.query("SELECT 1 FROM email_tokens WHERE user_id = $1 AND purpose = 'reset_password' AND used_at IS NULL", [id])).rowCount;
+      }
+      assert.equal(issued, 1);
     });
 
     test("tokens are stored only as hashes", async () => {

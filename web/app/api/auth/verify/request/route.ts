@@ -1,6 +1,6 @@
-import { clientIp, fail, hasSameOrigin, ok, parseLocale, readJson } from "@/lib/auth/http";
+import { fail, hasSameOrigin, ok, parseLocale, readJson } from "@/lib/auth/http";
 import { sendVerificationEmail } from "@/lib/auth/mailer";
-import { allow } from "@/lib/auth/rate-limit";
+import { allow, allowPerIp } from "@/lib/auth/rate-limit";
 import { getSessionUser } from "@/lib/auth/session";
 import { issueToken } from "@/lib/auth/tokens";
 
@@ -11,7 +11,7 @@ export async function POST(req: Request) {
     const user = await getSessionUser();
     if (!user) return fail("unauthorized", 401);
     if (!user.email || user.emailVerified) return ok();
-    if (!(await allow(`verify:user:${user.id}`, 3, 3600)) || !(await allow(`verify:ip:${clientIp(req)}`, 20, 3600))) {
+    if (!(await allow(`verify:user:${user.id}`, 3, 3600)) || !(await allowPerIp(req, "verify", 20, 3600))) {
       return fail("rate_limited", 429);
     }
     const body = await readJson(req);

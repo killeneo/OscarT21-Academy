@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
 import { test } from "node:test";
-import { clientIp, trustedIpHeader } from "../lib/auth/client-ip.ts";
+import { TrustedProxyConfigError, behindTrustedProxy, clientIp, ipSource } from "../lib/auth/client-ip.ts";
 import { isGoogleOwnedEmail } from "../lib/auth/google-email.ts";
 import { consoleMailAllowed } from "../lib/auth/mail-policy.ts";
 import { PasswordHashBusyError, checkPasswordPolicy, createLimiter, hashPassword, verifyPassword } from "../lib/auth/password.ts";
@@ -78,14 +78,28 @@ test("telegram: malformed input is rejected", () => {
 
 const reqWith = (headers) => new Request("http://localhost/", { headers });
 
-test("client IP: no header is trusted unless configured", () => {
+test("client IP: no header is trusted unless configured (development: one local bucket)", () => {
   const spoofed = reqWith({ "x-real-ip": "1.1.1.1", "x-forwarded-for": "2.2.2.2", "x-vercel-forwarded-for": "3.3.3.3" });
-  assert.equal(trustedIpHeader({}), null);
-  assert.equal(clientIp(spoofed, {}), "unknown");
+  assert.deepEqual(ipSource({}), { kind: "local" });
+  assert.equal(clientIp(spoofed, {}), "local");
+  assert.equal(clientIp(spoofed, { NODE_ENV: "development" }), "local");
+});
+
+test("client IP: an unconfigured production server refuses instead of sharing one bucket", () => {
+  assert.throws(() => ipSource({ NODE_ENV: "production" }), TrustedProxyConfigError);
+  assert.throws(() => clientIp(reqWith({ "x-real-ip": "1.1.1.1" }), { NODE_ENV: "production" }), TrustedProxyConfigError);
+  assert.equal(behindTrustedProxy({ NODE_ENV: "production" }), false);
+});
+
+test("client IP: TRUSTED_IP_HEADER=none switches per-IP limits off", () => {
+  assert.equal(clientIp(reqWith({ "x-real-ip": "1.1.1.1" }), { NODE_ENV: "production", TRUSTED_IP_HEADER: "none" }), null);
+  assert.equal(behindTrustedProxy({ TRUSTED_IP_HEADER: "None" }), false);
+  assert.equal(behindTrustedProxy({ TRUSTED_IP_HEADER: "x-real-ip" }), true);
+  assert.equal(behindTrustedProxy({ VERCEL: "1", NODE_ENV: "production" }), true);
 });
 
 test("client IP: Vercel header only on Vercel, configured header otherwise", () => {
-  assert.equal(clientIp(reqWith({ "x-vercel-forwarded-for": "3.3.3.3", "x-real-ip": "1.1.1.1" }), { VERCEL: "1" }), "3.3.3.3");
+  assert.equal(clientIp(reqWith({ "x-vercel-forwarded-for": "3.3.3.3", "x-real-ip": "1.1.1.1" }), { VERCEL: "1", NODE_ENV: "production" }), "3.3.3.3");
   assert.equal(clientIp(reqWith({ "x-real-ip": "1.1.1.1" }), { TRUSTED_IP_HEADER: "X-Real-IP" }), "1.1.1.1");
   assert.equal(clientIp(reqWith({}), { TRUSTED_IP_HEADER: "x-real-ip" }), "unknown");
 });

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { defaultLocale, hasLocale, type Locale } from "@/lib/i18n";
+import { siteUrl } from "@/lib/site";
+import { behindTrustedProxy } from "./client-ip";
 
 export type ErrorCode =
   | "invalid_input"
@@ -28,21 +30,24 @@ export function fail(code: ErrorCode, status: number) {
 
 /**
  * CSRF defence for state-changing routes (on top of SameSite=Lax cookies): browsers always send Origin on
- * cross-site and fetch() POSTs, and it must match the host the request was addressed to.
+ * cross-site and fetch() POSTs, and it must match the configured public origin or the host the request was
+ * addressed to. `X-Forwarded-Host` is believed only behind a trusted proxy (see client-ip.ts); otherwise any
+ * client could send a matching pair of Origin and X-Forwarded-Host.
  */
 export function hasSameOrigin(req: Request): boolean {
   const origin = req.headers.get("origin");
-  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
-  if (!origin || !host) return false;
+  if (!origin) return false;
+  let originHost: string;
   try {
-    return new URL(origin).host === host;
+    originHost = new URL(origin).host;
   } catch {
     return false;
   }
+  if (new URL(siteUrl).host === originHost) return true;
+  const forwarded = behindTrustedProxy() ? req.headers.get("x-forwarded-host") : null;
+  const host = forwarded ?? req.headers.get("host");
+  return host !== null && host === originHost;
 }
-
-// Client IP for rate limiting: only from a header our own proxy overwrites (see client-ip.ts).
-export { clientIp } from "./client-ip";
 
 const MAX_BODY_CHARS = 8 * 1024;
 const MAX_BODY_BYTES = MAX_BODY_CHARS * 4;

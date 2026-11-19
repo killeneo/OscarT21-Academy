@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { useId, useState, type FormEvent } from "react";
 import type { Messages } from "@/lib/i18n";
 import styles from "./auth.module.css";
-import { TelegramLogin } from "./telegram-login";
 
 export type Role = "parent" | "specialist" | "organization";
 const ROLES: Role[] = ["parent", "specialist", "organization"];
@@ -108,6 +107,7 @@ export function AuthForm({ mode, lang, m, consent, telegramBot, next, initialErr
   // Sign-in is a plain link; sign-up is a same-origin form POST, the only way the server accepts consent.
   const googleParams = new URLSearchParams({ lang });
   if (!isRegister && next) googleParams.set("next", next);
+  const telegramParams = new URLSearchParams(isRegister ? { mode: "register", role } : { mode: "login", ...(next ? { next } : {}) });
 
   const other = isRegister
     ? { text: m.haveAccount, link: m.signIn, href: `/${lang}/login` }
@@ -250,17 +250,12 @@ export function AuthForm({ mode, lang, m, consent, telegramBot, next, initialErr
           </a>
         )}
 
+        {/* Telegram's widget is a third-party script, so it lives on its own page without password fields. */}
         {telegramBot ? (
-          <div className={styles.telegramBox}>
-            <TelegramLogin
-              botUsername={telegramBot}
-              lang={lang}
-              onAuth={(user) => {
-                if (isRegister && !consentChecked) return setError("consent_required");
-                void post("/api/auth/telegram", { auth: user, role: isRegister ? role : "parent", consent: isRegister && consentChecked });
-              }}
-            />
-          </div>
+          <a className={styles.social} href={`/${lang}/telegram?${telegramParams.toString()}`}>
+            <TelegramLogo />
+            {m.telegram}
+          </a>
         ) : (
           <button type="button" className={`${styles.social} ${styles.disabledSocial}`} aria-disabled="true" onClick={() => setError("not_configured")}>
             <TelegramLogo />

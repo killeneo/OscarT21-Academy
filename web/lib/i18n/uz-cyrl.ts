@@ -173,6 +173,8 @@ export const uzCyrl: Messages = {
     google: "Google билан давом этиш",
     telegram: "Telegram орқали кириш",
     telegramNotConfigured: "Telegram орқали кириш ҳали созланмаган",
+    telegramTitle: "Telegram орқали кириш",
+    telegramText: "Telegram ойнасида тасдиқланг. Биз фақат исмингиз ва Telegram аккаунт идентификаторини оламиз, телефон рақамини эмас.",
     noAccount: "Аккаунтингиз йўқми?",
     createAccount: "Яратиш",
     haveAccount: "Аккаунтингиз борми?",

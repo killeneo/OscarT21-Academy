@@ -11,8 +11,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Current state:** `web/` holds a Next.js 16 (App Router, TypeScript, npm) frontend scaffold, intended for Vercel. Backend stack is not chosen yet (needs an ADR; keep personal/child data off Vercel pending legal review). CI lives in `.github/workflows/ci.yml`; setup steps are in `docs/ci-cd-setup.md`.
 
 **Commands (run inside `web/`):**
-- `npm ci` — install; `npm run dev` — dev server; `npm run build` — production build
-- `npm run lint`, `npm run typecheck` — checks; `npm test --if-present` — no test runner configured yet
+- `npm ci` — install; `npm run dev` — dev server (localhost only; `npm run dev:lan` for phone/LAN testing); `npm run build` — production build
+- `npm run db:migrate` — apply SQL migrations; `npm test` — unit tests + black-box security suite (needs a running server; `BASE_URL`, and `TRUSTED_IP_HEADER` matching the server's setting)
+- Production outside Vercel requires `TRUSTED_IP_HEADER` (see `web/.env.example`), otherwise auth routes refuse requests
+- `npm run lint`, `npm run typecheck` — checks (the security suite skips itself when no server is reachable)
 - `npm audit --audit-level=high` — dependency check used in CI
 
 **Documents:**

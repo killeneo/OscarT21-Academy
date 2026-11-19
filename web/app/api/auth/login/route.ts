@@ -1,14 +1,14 @@
 import { deviceOwner, trustDevice } from "@/lib/auth/devices";
-import { clientIp, fail, hasSameOrigin, ok, parseEmail, readJson } from "@/lib/auth/http";
+import { fail, hasSameOrigin, ok, parseEmail, readJson } from "@/lib/auth/http";
 import { PASSWORD_MAX, PasswordHashBusyError, burnPasswordCheck, verifyPassword } from "@/lib/auth/password";
-import { allow, hashKey } from "@/lib/auth/rate-limit";
+import { allow, allowPerIp, hashKey } from "@/lib/auth/rate-limit";
 import { createSession } from "@/lib/auth/session";
 import { findUserByEmail } from "@/lib/auth/users";
 
 export async function POST(req: Request) {
   try {
     if (!hasSameOrigin(req)) return fail("forbidden_origin", 403);
-    if (!(await allow(`login:ip:${clientIp(req)}`, 30, 900))) return fail("rate_limited", 429);
+    if (!(await allowPerIp(req, "login", 30, 900))) return fail("rate_limited", 429);
 
     const body = await readJson(req);
     const email = parseEmail(body?.email);
