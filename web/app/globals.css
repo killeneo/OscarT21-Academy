@@ -34,7 +34,7 @@
   --shadow-float: 0 10px 30px rgba(0, 0, 0, 0.05), 0 2px 6px rgba(0, 0, 0, 0.03);
 
   /* Sticky site header height; the hero fills the rest of the viewport. */
-  --header-h: 56px;
+  --header-h: 64px;
 
   --font-sans: var(--font-manrope), "Segoe UI", system-ui, sans-serif;
 }
@@ -146,32 +146,18 @@ svg {
   }
 }
 
-@media (max-width: 900px) {
-  :root {
-    --header-h: 64px;
-  }
-}
 
 /* ---------- Visitor display settings (data-* set by the settings panel) ---------- */
 html[data-text="large"] {
   font-size: 125%;
-  --header-h: 64px;
+  --header-h: 72px;
 }
 
 html[data-text="xlarge"] {
   font-size: 150%;
-  --header-h: 72px;
+  --header-h: 80px;
 }
 
-@media (max-width: 900px) {
-  html[data-text="large"] {
-    --header-h: 72px;
-  }
-
-  html[data-text="xlarge"] {
-    --header-h: 80px;
-  }
-}
 
 html[data-links="underline"] a {
   text-decoration: underline !important;
@@ -301,4 +287,20 @@ html[data-scan="on"] :focus {
   outline: 5px solid var(--forest);
   outline-offset: 4px;
   box-shadow: 0 0 0 9px var(--white);
+}
+
+/*
+ * Responsive safety net (zero specificity, so component styles can still override):
+ * grid/flex children may shrink below their content width, and long words wrap instead of pushing the layout wider.
+ */
+:where(main, header, footer) :where(div, section, article, aside, nav, form, fieldset, ul, li) {
+  min-width: 0;
+}
+
+:where(h1, h2, h3, h4, p, li, a, label, summary, legend, dd, dt) {
+  overflow-wrap: break-word;
+}
+
+:where(img, svg, video, canvas, table) {
+  max-width: 100%;
 }
