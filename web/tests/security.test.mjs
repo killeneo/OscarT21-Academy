@@ -67,6 +67,9 @@ async function register(email = uniq(), extra = {}) {
 }
 
 const resetLimits = () => db?.query("DELETE FROM rate_limits");
+const verifyEmail = (email) => db.query("UPDATE users SET email_verified_at = now() WHERE email = $1", [email]);
+/** A specialization slug that exists in this database (fixtures differ per DB). */
+const categorySlug = async () => (await db.query("SELECT slug FROM specialist_categories ORDER BY slug LIMIT 1")).rows[0]?.slug;
 
 describe("security (black-box)", { skip: !up || !db ? "server or database not reachable" : false }, () => {
   beforeEach(resetLimits); // each test starts with fresh rate-limit counters (10 sign-ups/hour per IP would otherwise trip)
@@ -140,6 +143,28 @@ describe("security (black-box)", { skip: !up || !db ? "server or database not re
     test("oversize bodies are rejected without a server error", async () => {
       const r = await post("/api/auth/login", { email: "a@b.co", password: "x".repeat(200_000) });
       assert.equal(r.status, 400);
+    });
+
+    test("an oversize chunked body (no Content-Length) is refused without buffering it all", async () => {
+      const chunk = new TextEncoder().encode(" ".repeat(16 * 1024));
+      const limit = 4 * 1024 * 1024;
+      let sent = 0;
+      const body = new ReadableStream({
+        pull(controller) {
+          if (sent >= limit) return controller.close();
+          sent += chunk.byteLength;
+          controller.enqueue(chunk);
+        },
+      });
+      const res = await fetch(`${BASE}/api/auth/login`, { method: "POST", headers: { Origin: BASE, "Content-Type": "application/json" }, body, duplex: "half" }).catch(() => null);
+      if (res) assert.equal(res.status, 400);
+      assert.ok(sent < limit, `server read ${sent} bytes before refusing`);
+    });
+
+    test("NUL and control characters are bad input, never a server error", async () => {
+      assert.equal((await post("/api/auth/login", { email: "a\u0000b@example.com", password: "x".repeat(12) })).status, 400);
+      assert.equal((await post("/api/auth/register", { email: uniq(), password: PASSWORD, displayName: "a\u0000b", consent: true })).status, 400);
+      assert.equal((await fetch(`${BASE}/ru/specialists?q=${encodeURIComponent("a\u0000b")}`)).status, 200);
     });
 
     test("wrong types never cause a 500", async () => {
@@ -233,6 +258,20 @@ describe("security (black-box)", { skip: !up || !db ? "server or database not re
     });
   });
 
+  describe("password blocklist", () => {
+    test("common passwords and the e-mail's own name are refused at sign-up", async () => {
+      for (const password of ["1234567890", "Qwertyuiop", "password123"]) {
+        const r = await post("/api/auth/register", { email: uniq(), password, consent: true, lang: "ru" });
+        assert.equal(r.status, 400, password);
+        assert.equal(r.json?.error?.code, "common_password", password);
+        assert.equal(r.session, undefined);
+      }
+      const email = uniq();
+      const own = await post("/api/auth/register", { email, password: email.split("@")[0], consent: true, lang: "ru" });
+      assert.equal(own.json?.error?.code, "common_password");
+    });
+  });
+
   describe("account enumeration and timing", () => {
     test("registering a taken e-mail looks identical to a new one and creates no session", async () => {
       const first = await register();
@@ -297,6 +336,20 @@ describe("security (black-box)", { skip: !up || !db ? "server or database not re
       assert.equal((await fetch(`${BASE}/api/auth/me`, { headers: { Cookie: r.session } })).status, 200);
       assert.equal((await post("/api/auth/logout", {}, { cookie: r.session })).status, 200);
       assert.equal((await fetch(`${BASE}/api/auth/me`, { headers: { Cookie: r.session } })).status, 401);
+    });
+
+    test("logging out everywhere kills every session of the account, and only that account", async () => {
+      await resetLimits();
+      const r = await register();
+      const second = await post("/api/auth/login", { email: r.email, password: PASSWORD });
+      const stranger = await register();
+      assert.equal((await post("/api/auth/logout-all", {}, { cookie: second.session })).status, 200);
+      for (const c of [r.session, second.session]) {
+        assert.equal((await fetch(`${BASE}/api/auth/me`, { headers: { Cookie: c } })).status, 401);
+      }
+      assert.equal((await fetch(`${BASE}/api/auth/me`, { headers: { Cookie: stranger.session } })).status, 200);
+      assert.equal((await post("/api/auth/logout-all", {})).status, 401, "needs a session");
+      assert.equal((await post("/api/auth/logout-all", {}, { cookie: stranger.session, origin: "https://evil.example" })).status, 403);
     });
 
     test("every login issues a fresh token (no session fixation)", async () => {
@@ -410,6 +463,19 @@ describe("security (black-box)", { skip: !up || !db ? "server or database not re
       assert.equal((await post("/api/auth/password/reset", { token, password: "a perfectly fine passphrase" })).status, 200);
     });
 
+    test("a new reset request does not cancel an earlier link; a successful reset cancels all of them", async () => {
+      await resetLimits();
+      const r = await register();
+      const id = await idOf(r.email);
+      const first = await issue(id, "reset_password");
+      const second = await issue(id, "reset_password");
+      assert.equal((await post("/api/auth/password/forgot", { email: r.email })).status, 200);
+      assert.equal((await db.query("SELECT 1 FROM email_tokens WHERE token_hash = $1 AND used_at IS NULL", [sha256(first)])).rowCount, 1, "first link still usable");
+      assert.equal((await post("/api/auth/password/reset", { token: first, password: "a brand new passphrase" })).status, 200);
+      assert.equal((await post("/api/auth/password/reset", { token: second, password: "another new passphrase" })).status, 400, "other links die with the reset");
+      assert.equal((await db.query("SELECT 1 FROM email_tokens WHERE user_id = $1 AND purpose = 'reset_password' AND used_at IS NULL", [id])).rowCount, 0);
+    });
+
     test("tokens are stored only as hashes", async () => {
       const r = await register();
       const token = await issue(await idOf(r.email), "verify_email");
@@ -450,7 +516,7 @@ describe("security (black-box)", { skip: !up || !db ? "server or database not re
     test("a specialist cannot verify or publish themselves or touch other people's profiles", async () => {
       const spec = await register(uniq(), { role: "specialist" });
       const other = await register(uniq(), { role: "specialist" });
-      const base = { displayName: "Spec", category: "speech-therapist", headline: "Hello", city: "tashkent", formats: ["online"], experienceYears: 3, submit: true };
+      const base = { displayName: "Spec", category: "speech-therapist", headline: "Hello", city: "tashkent", formats: ["online"], experienceYears: 3, priceFrom: 100000, priceTo: 200000, ageMin: 3, ageMax: 12, submit: true };
       const sneaky = { ...base, verification_status: "verified", verificationStatus: "verified", is_published: true, isPublished: true, user_id: "x", userId: "x", role: "admin" };
       const res = await post("/api/profile/onboarding", sneaky, { cookie: spec.session });
       assert.ok([200, 400].includes(res.status), String(res.status));
@@ -468,12 +534,36 @@ describe("security (black-box)", { skip: !up || !db ? "server or database not re
 
     test("a submitted profile is locked against edits", async () => {
       const spec = await register(uniq(), { role: "specialist" });
-      const p = { displayName: "Spec", category: "speech-therapist", headline: "Hello", city: "tashkent", formats: ["online"], experienceYears: 3, submit: true };
+      await verifyEmail(spec.email);
+      const p = { displayName: "Spec", category: await categorySlug(), headline: "Hello", city: "tashkent", formats: ["online"], experienceYears: 3, priceFrom: 100000, priceTo: 200000, ageMin: 3, ageMax: 12, submit: true };
       const first = await post("/api/profile/onboarding", p, { cookie: spec.session });
-      if (first.status !== 200) return; // fixture categories differ per DB; the locking rule is covered when seeded
-      await db.query("UPDATE specialist_profiles SET verification_status = 'verified' WHERE user_id = (SELECT id FROM users WHERE email = $1)", [spec.email]);
+      assert.equal(first.status, 200, first.text);
+      await db.query("UPDATE specialist_profiles SET verification_status = 'confirmed' WHERE user_id = (SELECT id FROM users WHERE email = $1)", [spec.email]);
       const again = await post("/api/profile/onboarding", { ...p, headline: "Changed after verification" }, { cookie: spec.session });
       assert.equal(again.status, 409);
+    });
+
+    test("an unconfirmed e-mail can save a draft but not send it for review or create an organization", async () => {
+      const spec = await register(uniq(), { role: "specialist" });
+      const p = { displayName: "Spec", category: await categorySlug(), headline: "Hello", city: "tashkent", formats: ["online"], experienceYears: 3, priceFrom: 100000, priceTo: 200000, ageMin: 3, ageMax: 12 };
+      assert.equal((await post("/api/profile/onboarding", { ...p, submit: false }, { cookie: spec.session })).status, 200, "draft");
+      const refused = await post("/api/profile/onboarding", { ...p, submit: true }, { cookie: spec.session });
+      assert.equal(refused.status, 403);
+      assert.equal(refused.json?.error?.code, "email_unverified");
+      const status = await db.query("SELECT verification_status FROM specialist_profiles WHERE user_id = (SELECT id FROM users WHERE email = $1)", [spec.email]);
+      assert.equal(status.rows[0].verification_status, "draft");
+      await verifyEmail(spec.email);
+      assert.equal((await post("/api/profile/onboarding", { ...p, submit: true }, { cookie: spec.session })).status, 200, "after confirmation");
+
+      const org = await register(uniq(), { role: "organization" });
+      const o = { name: "Test School", orgType: "school", city: "tashkent" };
+      assert.equal((await post("/api/profile/onboarding", o, { cookie: org.session })).status, 403);
+      assert.equal((await db.query("SELECT 1 FROM organizations WHERE owner_user_id = (SELECT id FROM users WHERE email = $1)", [org.email])).rowCount, 0);
+      await verifyEmail(org.email);
+      assert.equal((await post("/api/profile/onboarding", o, { cookie: org.session })).status, 200);
+
+      const parent = await register();
+      assert.equal((await post("/api/profile/onboarding", { city: "tashkent" }, { cookie: parent.session })).status, 200, "parents are not gated");
     });
 
     test("self-service endpoints never return other users' data", async () => {
@@ -487,7 +577,9 @@ describe("security (black-box)", { skip: !up || !db ? "server or database not re
 
     test("unpublished specialists never appear in search results seen by other users", async () => {
       const spec = await register(uniq(), { role: "specialist", displayName: "Zzqx Hidden Draft" });
-      await post("/api/profile/onboarding", { displayName: "Zzqx Hidden Draft", category: "speech-therapist", headline: "Hello", city: "tashkent", formats: ["online"], experienceYears: 1, submit: true }, { cookie: spec.session });
+      await verifyEmail(spec.email);
+      const saved = await post("/api/profile/onboarding", { displayName: "Zzqx Hidden Draft", category: await categorySlug(), headline: "Hello", city: "tashkent", formats: ["online"], experienceYears: 1, priceFrom: 100000, priceTo: 200000, ageMin: 3, ageMax: 12, submit: true }, { cookie: spec.session });
+      assert.equal(saved.status, 200, "the profile must really exist for this check to mean anything");
       const viewer = await register();
       const page = await (await fetch(`${BASE}/ru/specialists?q=Zzqx`, { headers: { Cookie: viewer.session } })).text();
       assert.ok(!page.includes("Zzqx Hidden Draft"), "draft/submitted profiles must not be listed");
@@ -508,6 +600,34 @@ describe("security (black-box)", { skip: !up || !db ? "server or database not re
   });
 
   describe("OAuth and Telegram", () => {
+    test("Google: a link cannot record consent; only a same-origin form POST can", async () => {
+      const readPending = (res) => {
+        const raw = (res.headers.getSetCookie?.() ?? []).find((c) => /^(__Host-)?google_oauth=./.test(c));
+        return raw ? JSON.parse(decodeURIComponent(raw.split(";")[0].replace(/^(__Host-)?google_oauth=/, ""))) : null;
+      };
+      const viaLink = await fetch(`${BASE}/api/auth/google?lang=ru&role=specialist&consent=1`, { redirect: "manual" });
+      const linkState = readPending(viaLink);
+      if (linkState) assert.equal(linkState.consent, false, "GET must never carry consent");
+
+      const form = (origin) =>
+        fetch(`${BASE}/api/auth/google`, {
+          method: "POST",
+          redirect: "manual",
+          headers: { "Content-Type": "application/x-www-form-urlencoded", ...(origin ? { Origin: origin } : {}) },
+          body: new URLSearchParams({ lang: "ru", role: "specialist", consent: "1", next: "/ru/onboarding" }),
+        });
+      for (const origin of [null, "https://evil.example"]) {
+        const res = await form(origin);
+        assert.equal(res.status, 303);
+        assert.match(res.headers.get("location") ?? "", /\/register\?error=forbidden_origin/);
+        assert.equal(readPending(res), null, "no OAuth state for a cross-site post");
+      }
+      const accepted = await form(BASE);
+      assert.equal(accepted.status, 303);
+      const state = readPending(accepted);
+      if (state) assert.equal(state.consent, true);
+    });
+
     test("Google start never carries an off-site redirect target", async () => {
       const res = await fetch(`${BASE}/api/auth/google?lang=ru&role=parent&next=${encodeURIComponent("//evil.example/x")}`, { redirect: "manual" });
       assert.ok([302, 307].includes(res.status));

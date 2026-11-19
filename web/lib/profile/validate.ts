@@ -30,6 +30,8 @@ const ORG_TYPES = ["school", "center", "ngo", "other"] as const;
 function text(value: unknown, min: number, max: number): string | null {
   if (typeof value !== "string") return null;
   const v = value.replace(/\s+/g, " ").trim();
+  // Control characters (NUL makes PostgreSQL reject the query) are invalid input, not a server error.
+  if (/[\u0000-\u001f\u007f]/.test(v)) return null;
   return v.length >= min && v.length <= max ? v : null;
 }
 

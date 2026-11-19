@@ -269,6 +269,7 @@ async function AccountBody({ lang }: { lang: Locale }) {
                 </a>
               ) : null}
               <LogoutButton lang={lang} label={m.auth.account.logout} busyLabel={m.auth.account.loggingOut} className={styles.logout} />
+              <LogoutButton lang={lang} label={m.auth.account.logoutAll} busyLabel={m.auth.account.loggingOut} className={styles.logout} everywhere />
             </div>
           </aside>
         </div>

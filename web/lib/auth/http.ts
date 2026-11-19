@@ -5,6 +5,8 @@ export type ErrorCode =
   | "invalid_input"
   | "invalid_credentials"
   | "weak_password"
+  | "common_password"
+  | "email_unverified"
   | "rate_limited"
   | "forbidden_origin"
   | "not_configured"
@@ -43,15 +45,44 @@ export function hasSameOrigin(req: Request): boolean {
 export { clientIp } from "./client-ip";
 
 const MAX_BODY_CHARS = 8 * 1024;
+const MAX_BODY_BYTES = MAX_BODY_CHARS * 4;
+
+/**
+ * Reads at most `maxBytes` of a body as UTF-8, or returns null once it grows past that. Streaming matters for
+ * chunked uploads without Content-Length: `req.text()` would buffer an arbitrarily large body before any check.
+ */
+export async function readLimitedText(req: Request, maxBytes: number): Promise<string | null> {
+  if (!req.body) return "";
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > maxBytes) {
+      await reader.cancel().catch(() => {});
+      return null;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
 
 /** Parses a small JSON object body; returns null for wrong content type, oversize or invalid JSON. */
 export async function readJson(req: Request): Promise<Record<string, unknown> | null> {
   if (!req.headers.get("content-type")?.toLowerCase().startsWith("application/json")) return null;
-  // Reject an oversize body from its declared length before buffering any of it.
+  // Reject an oversize body from its declared length before reading any of it.
   const declared = Number(req.headers.get("content-length"));
-  if (Number.isFinite(declared) && declared > MAX_BODY_CHARS * 4) return null;
-  const text = await req.text();
-  if (text.length > MAX_BODY_CHARS) return null;
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) return null;
+  const text = await readLimitedText(req, MAX_BODY_BYTES);
+  if (text === null || text.length > MAX_BODY_CHARS) return null;
   try {
     const value: unknown = JSON.parse(text);
     return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
@@ -61,18 +92,20 @@ export async function readJson(req: Request): Promise<Record<string, unknown> | 
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+// Control characters are never valid in these fields; NUL in particular makes PostgreSQL reject the query (500).
+const CONTROL_RE = /[\u0000-\u001f\u007f]/;
 
 export function parseEmail(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const email = value.trim().toLowerCase();
-  return email.length <= 254 && EMAIL_RE.test(email) ? email : null;
+  return email.length <= 254 && EMAIL_RE.test(email) && !CONTROL_RE.test(email) ? email : null;
 }
 
 export function parseDisplayName(value: unknown): string | null {
   if (value === undefined || value === null || value === "") return "";
   if (typeof value !== "string") return null;
   const name = value.trim().replace(/\s+/g, " ");
-  return name.length <= 80 ? name : null;
+  return name.length <= 80 && !CONTROL_RE.test(name) ? name : null;
 }
 
 export function parseLocale(value: unknown): Locale {

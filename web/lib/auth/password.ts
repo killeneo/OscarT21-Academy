@@ -1,4 +1,5 @@
 import { randomBytes, scrypt, timingSafeEqual, type ScryptOptions } from "node:crypto";
+import { COMMON_PASSWORDS } from "./common-passwords.ts";
 
 // scrypt parameters from the OWASP Password Storage Cheat Sheet (N=2^15, r=8, p=3).
 const N = 32768;
@@ -77,10 +78,24 @@ export async function burnPasswordCheck(password: string): Promise<void> {
   await verifyPassword(password, await dummyHash);
 }
 
-/** Length-only policy (NIST 800-63B): no composition rules. Returns an error code or null. */
-export function checkPasswordPolicy(password: string, email: string): "weak_password" | null {
+let common: Set<string> | undefined;
+
+/** Built once on first use from the bundled list (~9k entries, all >= 10 characters). */
+function isCommonPassword(password: string): boolean {
+  common ??= new Set(COMMON_PASSWORDS.split("\n").filter(Boolean));
+  return common.has(password.normalize("NFKC").toLowerCase());
+}
+
+/**
+ * NIST 800-63B policy: length limits, no composition rules, and a blocklist of commonly used / breached passwords
+ * (case-insensitive) plus the account's own e-mail. Returns an error code or null.
+ */
+export function checkPasswordPolicy(password: string, email: string): "weak_password" | "common_password" | null {
   const len = [...password].length;
   if (len < PASSWORD_MIN || len > PASSWORD_MAX) return "weak_password";
-  if (password.toLowerCase() === email.toLowerCase()) return "weak_password";
+  const lower = password.normalize("NFKC").toLowerCase();
+  const mail = email.toLowerCase();
+  if (lower === mail || (mail.includes("@") && lower === mail.slice(0, mail.indexOf("@")))) return "common_password";
+  if (isCommonPassword(password)) return "common_password";
   return null;
 }

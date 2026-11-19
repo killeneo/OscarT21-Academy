@@ -41,7 +41,8 @@ function int(value: string | string[] | undefined, min: number, max: number): nu
 }
 
 export function parseSearchParams(raw: Raw): SearchFilters {
-  const q = (last(raw.q) ?? "").replace(/\s+/g, " ").trim().slice(0, 80);
+  // Control characters are dropped: NUL in particular makes PostgreSQL reject the whole query.
+  const q = (last(raw.q) ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
   const category = last(raw.category);
   const city = last(raw.city);
   const format = last(raw.format);

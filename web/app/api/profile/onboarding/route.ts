@@ -7,7 +7,8 @@ import { parseOnboarding } from "@/lib/profile/validate";
 /**
  * Saves the role-specific profile after registration. The role always comes from the server-side session,
  * never from the request body. Verification status is never taken from the client: a specialist can only
- * save a draft or send it for review; confirming it is the moderator's job.
+ * save a draft or send it for review; confirming it is the moderator's job. Sending for review and creating an
+ * organization require a confirmed e-mail.
  */
 export async function POST(req: Request) {
   try {
@@ -19,6 +20,14 @@ export async function POST(req: Request) {
     if (!body) return fail("invalid_input", 400);
     const parsed = parseOnboarding(user.role, body, isCity);
     if (!parsed.ok) return fail("invalid_input", 400);
+
+    // Anyone can sign up with someone else's address, so steps that put a profile in front of moderators or other
+    // people need a confirmed e-mail: sending a specialist profile for review and creating an organization.
+    // Accounts without an e-mail (Telegram) have no address to impersonate.
+    const unverified = user.email !== null && !user.emailVerified;
+    if (unverified && (parsed.role === "organization" || (parsed.role === "specialist" && parsed.data.submit))) {
+      return fail("email_unverified", 403);
+    }
 
     const client = await db().connect();
     try {

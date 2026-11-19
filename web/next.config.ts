@@ -6,7 +6,7 @@ const dev = process.env.NODE_ENV !== "production";
  * Content-Security-Policy. Next.js emits small inline bootstrap scripts, and pages are statically rendered, so a
  * per-request nonce is not possible: 'unsafe-inline' is kept for scripts. The policy still blocks the things
  * that matter most: foreign script hosts, plugins (object-src), clickjacking (frame-ancestors), <base> hijacking
- * and form posts to other sites. Telegram's login widget is the only third-party script/frame we allow.
+ * and form posts to other sites (Google's sign-in page is the one allowed form redirect). Telegram's login widget is the only third-party script/frame we allow.
  * Dev needs eval + websockets for hot reload.
  */
 const csp = [
@@ -19,7 +19,8 @@ const csp = [
   "frame-src https://oauth.telegram.org",
   "object-src 'none'",
   "base-uri 'self'",
-  "form-action 'self'",
+  // The Google sign-up form posts to our own route, which redirects to Google; form-action also covers that hop.
+  "form-action 'self' https://accounts.google.com",
   "frame-ancestors 'none'",
   ...(dev ? [] : ["upgrade-insecure-requests"]),
 ].join("; ");

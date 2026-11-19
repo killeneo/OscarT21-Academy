@@ -33,6 +33,11 @@ export async function POST(req: Request) {
         [used.userId, passwordHash],
       );
       await client.query("DELETE FROM sessions WHERE user_id = $1", [used.userId]);
+      // Every other reset link sent earlier dies with this one.
+      await client.query(
+        "UPDATE email_tokens SET used_at = now() WHERE user_id = $1 AND purpose = 'reset_password' AND used_at IS NULL",
+        [used.userId],
+      );
       // Browsers remembered before the reset (possibly the attacker's) lose their own login-attempt budget.
       await client.query("DELETE FROM trusted_devices WHERE user_id = $1", [used.userId]);
       await client.query("COMMIT");

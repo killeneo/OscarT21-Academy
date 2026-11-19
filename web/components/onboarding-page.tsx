@@ -69,6 +69,7 @@ async function Body({ lang }: { lang: Locale }) {
         categories={categories}
         initial={initial}
         locked={locked}
+        needsVerification={user.role !== "parent" && user.email !== null && !user.emailVerified}
       />
     </AuthShell>
   );

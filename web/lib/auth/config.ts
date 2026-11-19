@@ -16,8 +16,11 @@ export const isProduction = process.env.NODE_ENV === "production";
 
 /** `__Host-` cookies require Secure + Path=/ + no Domain, so they are used only in production (HTTPS). */
 export const SESSION_COOKIE = isProduction ? "__Host-session" : "session";
-/** Short-lived cookie holding the OAuth state + PKCE verifier. */
-export const GOOGLE_COOKIE = "google_oauth";
+/**
+ * Short-lived cookie holding the OAuth state + PKCE verifier. `__Host-` in production: a sibling subdomain cannot
+ * plant its own state/verifier (cookie tossing) to log the victim into an attacker's account.
+ */
+export const GOOGLE_COOKIE = isProduction ? "__Host-google_oauth" : "google_oauth";
 export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 14;
 /** Device cookie: marks a browser that signed in to an account before (rate-limit budget only, not a credential). */
 export const DEVICE_COOKIE = isProduction ? "__Host-device" : "device";

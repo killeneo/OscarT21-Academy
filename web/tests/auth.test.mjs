@@ -2,7 +2,10 @@
 import assert from "node:assert/strict";
 import { createHash, createHmac } from "node:crypto";
 import { test } from "node:test";
-import { checkPasswordPolicy, hashPassword, verifyPassword } from "../lib/auth/password.ts";
+import { clientIp, trustedIpHeader } from "../lib/auth/client-ip.ts";
+import { isGoogleOwnedEmail } from "../lib/auth/google-email.ts";
+import { consoleMailAllowed } from "../lib/auth/mail-policy.ts";
+import { PasswordHashBusyError, checkPasswordPolicy, createLimiter, hashPassword, verifyPassword } from "../lib/auth/password.ts";
 import { verifyTelegramAuth } from "../lib/auth/telegram.ts";
 
 test("password hash verifies and is salted", async () => {
@@ -19,11 +22,19 @@ test("password verification rejects malformed hashes", async () => {
   assert.equal(await verifyPassword("x", "scrypt$a$b$c$d$e"), false);
 });
 
-test("password policy is length-only and rejects email as password", () => {
+test("password policy: length limits, no composition rules", () => {
   assert.equal(checkPasswordPolicy("short", "a@b.co"), "weak_password");
   assert.equal(checkPasswordPolicy("x".repeat(129), "a@b.co"), "weak_password");
-  assert.equal(checkPasswordPolicy("alice@example.com", "alice@example.com"), "weak_password");
   assert.equal(checkPasswordPolicy("a long enough phrase", "a@b.co"), null);
+});
+
+test("password policy: common passwords and the account's own e-mail are refused (case-insensitive)", () => {
+  for (const p of ["1234567890", "QWERTYUIOP", "qwertyuiop", "Password123", "йцукенгшщз", "1q2w3e4r5t"]) {
+    assert.equal(checkPasswordPolicy(p, "a@b.co"), "common_password", p);
+  }
+  assert.equal(checkPasswordPolicy("alice@example.com", "alice@example.com"), "common_password");
+  assert.equal(checkPasswordPolicy("ALICE.SMITH1", "alice.smith1@example.com"), "common_password");
+  assert.equal(checkPasswordPolicy("correct horse battery staple", "a@b.co"), null);
 });
 
 const BOT_TOKEN = "123456:TEST-TOKEN-not-real";
@@ -63,11 +74,7 @@ test("telegram: malformed input is rejected", () => {
   }
 });
 
-// --- client IP, hashing concurrency, console mail policy ---------------------------------------------------------
-
-import { clientIp, trustedIpHeader } from "../lib/auth/client-ip.ts";
-import { PasswordHashBusyError, createLimiter } from "../lib/auth/password.ts";
-import { consoleMailAllowed } from "../lib/auth/mail-policy.ts";
+// --- client IP, hashing concurrency, console mail policy, Google e-mail linking -----------------------------------
 
 const reqWith = (headers) => new Request("http://localhost/", { headers });
 
@@ -128,4 +135,12 @@ test("console mail: allowed in dev, refused on a real production host", () => {
   assert.equal(consoleMailAllowed({ NODE_ENV: "production", MAIL_TRANSPORT: "console", NEXT_PUBLIC_SITE_URL: "https://localhost.example.org" }), false);
   assert.equal(consoleMailAllowed({ NODE_ENV: "production", MAIL_TRANSPORT: "console", NEXT_PUBLIC_SITE_URL: "http://localhost:3000" }), true);
   assert.equal(consoleMailAllowed({ NODE_ENV: "production", MAIL_TRANSPORT: "console", NEXT_PUBLIC_SITE_URL: "not a url" }), false);
+});
+
+test("google linking by e-mail: only Google-owned domains", () => {
+  assert.equal(isGoogleOwnedEmail("someone@gmail.com"), true);
+  assert.equal(isGoogleOwnedEmail("Someone@GoogleMail.com"), true);
+  for (const e of ["ceo@startup.io", "user@mail.ru", "x@gmail.com.evil.io", "gmail.com", "@gmail.com", "a@sub.gmail.com"]) {
+    assert.equal(isGoogleOwnedEmail(e), false, e);
+  }
 });

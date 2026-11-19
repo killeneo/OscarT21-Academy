@@ -53,11 +53,20 @@ export async function getSessionUser(): Promise<SessionUser | null> {
   };
 }
 
+async function clearSessionCookie(): Promise<void> {
+  (await cookies()).set(SESSION_COOKIE, "", { httpOnly: true, secure: isProduction, sameSite: "lax", path: "/", maxAge: 0 });
+}
+
 export async function destroySession(): Promise<void> {
-  const jar = await cookies();
-  const token = jar.get(SESSION_COOKIE)?.value;
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (token && token.length <= 200) {
     await db().query("DELETE FROM sessions WHERE token_hash = $1", [sha256(token)]);
   }
-  jar.set(SESSION_COOKIE, "", { httpOnly: true, secure: isProduction, sameSite: "lax", path: "/", maxAge: 0 });
+  await clearSessionCookie();
+}
+
+/** "Log out everywhere": revokes every session of the user, including ones on lost or stolen devices. */
+export async function destroyAllSessions(userId: string): Promise<void> {
+  await db().query("DELETE FROM sessions WHERE user_id = $1", [userId]);
+  await clearSessionCookie();
 }

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useId, useState, type FormEvent } from "react";
 import type { Messages } from "@/lib/i18n";
+import { ResendVerification } from "./resend-verification";
 import styles from "./auth.module.css";
 
 export type OnboardingInitial = {
@@ -29,6 +30,8 @@ type Props = {
   categories: { slug: string; name: string }[];
   initial: OnboardingInitial;
   locked: boolean;
+  /** E-mail not confirmed yet: sending for review / saving an organization is refused by the server. */
+  needsVerification: boolean;
 };
 
 const intOrEmpty = (v: FormDataEntryValue | null) => {
@@ -36,7 +39,7 @@ const intOrEmpty = (v: FormDataEntryValue | null) => {
   return s === "" ? undefined : Number(s);
 };
 
-export function OnboardingForm({ role, lang, m, auth, cities, categories, initial, locked }: Props) {
+export function OnboardingForm({ role, lang, m, auth, cities, categories, initial, locked, needsVerification }: Props) {
   const router = useRouter();
   const uid = useId();
   const [formats, setFormats] = useState<string[]>(initial.formats.length ? initial.formats : ["online"]);
@@ -99,6 +102,12 @@ export function OnboardingForm({ role, lang, m, auth, cities, categories, initia
         ) : null}
         {locked ? <p className={styles.notice}>{m.locked}</p> : null}
       </div>
+      {needsVerification && !locked ? (
+        <div className={styles.notice} id={`${uid}-verify`}>
+          <p style={{ margin: "0 0 8px" }}>{role === "organization" ? m.verifyFirstOrg : m.verifyFirstSpec}</p>
+          <ResendVerification lang={lang} label={m.resend} doneLabel={m.resent} errorLabel={auth.errors.rate_limited} compact />
+        </div>
+      ) : null}
 
       <form
         className={styles.form}
@@ -218,6 +227,8 @@ export function OnboardingForm({ role, lang, m, auth, cities, categories, initia
                 <button
                   type="button"
                   className={styles.submit}
+                  disabled={needsVerification}
+                  aria-describedby={needsVerification ? `${uid}-verify` : undefined}
                   onClick={(e) => {
                     const f = e.currentTarget.form!;
                     if (!f.reportValidity() || formats.length === 0) return;
@@ -231,7 +242,12 @@ export function OnboardingForm({ role, lang, m, auth, cities, categories, initia
                 </button>
               </>
             ) : (
-              <button type="submit" className={styles.submit}>
+              <button
+                type="submit"
+                className={styles.submit}
+                disabled={role === "organization" && needsVerification}
+                aria-describedby={role === "organization" && needsVerification ? `${uid}-verify` : undefined}
+              >
                 {pending ? m.saving : m.save}
               </button>
             )}

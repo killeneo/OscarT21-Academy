@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import { db } from "./db";
 import type { SelfRole } from "./config";
+import { isGoogleOwnedEmail } from "./google-email";
 
 export type UserRow = { id: string; email: string | null; password_hash: string | null; status: "active" | "suspended" };
 
@@ -33,14 +34,18 @@ export async function createPasswordUser(input: {
 }
 
 export type OAuthProfile = { email: string | null; emailVerified: boolean; displayName: string };
-export type OAuthResult = { ok: true; userId: string } | { ok: false; reason: "suspended" | "consent_required" };
+export type OAuthResult =
+  | { ok: true; userId: string }
+  | { ok: false; reason: "suspended" | "consent_required" | "link_requires_password" };
 
 /**
  * Finds or creates the user for an external identity (Google / Telegram).
  *
- * Linking by email happens only for a *verified* provider email. If the matching local account never
- * proved ownership of that email (password sign-up without verification), its password is cleared and its
- * sessions revoked, so someone who pre-registered a victim's email cannot keep access (pre-hijacking).
+ * Linking to an existing account by email happens only for a *verified* provider email on a Google-owned domain
+ * (gmail.com): for other domains it is refused and the person signs in with their password instead, so a
+ * re-registered domain cannot take over its old users' accounts. If the matching local account never proved
+ * ownership of the email (password sign-up without verification), its password is cleared and its sessions
+ * revoked, so someone who pre-registered a victim's email cannot keep access (pre-hijacking).
  */
 export async function findOrCreateOAuthUser(
   provider: "google" | "telegram",
@@ -100,6 +105,7 @@ async function resolve(
     const match = byEmail.rows[0];
     if (match) {
       if (match.status !== "active") return { ok: false, reason: "suspended" };
+      if (provider === "google" && !isGoogleOwnedEmail(email)) return { ok: false, reason: "link_requires_password" };
       if (!match.email_verified_at) {
         await client.query(
           "UPDATE users SET email_verified_at = now(), password_hash = NULL, updated_at = now() WHERE id = $1",

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { CONSENT_VERSION, DEFAULT_ROLE, GOOGLE_COOKIE, googleConfig, isSelfRole, type SelfRole } from "@/lib/auth/config";
+import { CONSENT_VERSION, DEFAULT_ROLE, GOOGLE_COOKIE, googleConfig, isProduction, isSelfRole, type SelfRole } from "@/lib/auth/config";
 import { clientIp, parseLocale, safeNextPath } from "@/lib/auth/http";
 import { allow } from "@/lib/auth/rate-limit";
 import { createSession } from "@/lib/auth/session";
@@ -30,7 +30,7 @@ function readPending(raw: string | undefined): Pending | null {
 export async function GET(req: Request) {
   const jar = await cookies();
   const pending = readPending(jar.get(GOOGLE_COOKIE)?.value);
-  jar.set(GOOGLE_COOKIE, "", { path: "/api/auth/google", maxAge: 0 }); // single use
+  jar.set(GOOGLE_COOKIE, "", { path: "/", maxAge: 0, httpOnly: true, secure: isProduction, sameSite: "lax" }); // single use
   const lang = parseLocale(pending?.lang);
   const toLogin = (error: string) => NextResponse.redirect(new URL(`/${lang}/login?error=${error}`, siteUrl));
 
@@ -83,7 +83,10 @@ export async function GET(req: Request) {
       pending.role,
       pending.consent ? CONSENT_VERSION : null,
     );
-    if (!result.ok) return toLogin(result.reason === "consent_required" ? "consent_required" : "account_suspended");
+    if (!result.ok) {
+      const code = { consent_required: "consent_required", link_requires_password: "google_link_password", suspended: "account_suspended" } as const;
+      return toLogin(code[result.reason]);
+    }
 
     await createSession(result.userId);
     return NextResponse.redirect(new URL(safeNextPath(pending.next, lang), siteUrl));

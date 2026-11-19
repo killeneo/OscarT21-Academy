@@ -105,14 +105,9 @@ export function AuthForm({ mode, lang, m, consent, telegramBot, next, initialErr
     void post(isRegister ? "/api/auth/register" : "/api/auth/login", payload);
   }
 
+  // Sign-in is a plain link; sign-up is a same-origin form POST, the only way the server accepts consent.
   const googleParams = new URLSearchParams({ lang });
-  if (isRegister) {
-    googleParams.set("role", role);
-    googleParams.set("next", `/${lang}/onboarding`);
-    if (consentChecked) googleParams.set("consent", "1");
-  } else if (next) {
-    googleParams.set("next", next);
-  }
+  if (!isRegister && next) googleParams.set("next", next);
 
   const other = isRegister
     ? { text: m.haveAccount, link: m.signIn, href: `/${lang}/login` }
@@ -227,20 +222,33 @@ export function AuthForm({ mode, lang, m, consent, telegramBot, next, initialErr
       </p>
 
       <div className={styles.socials}>
-        {/* Plain link: the OAuth flow is a full-page redirect handled by the server. */}
-        <a
-          className={styles.social}
-          href={`/api/auth/google?${googleParams.toString()}`}
-          onClick={(event) => {
-            if (isRegister && !consentChecked) {
-              event.preventDefault();
-              setError("consent_required");
-            }
-          }}
-        >
-          <GoogleLogo />
-          {m.google}
-        </a>
+        {/* The OAuth flow is a full-page redirect handled by the server. */}
+        {isRegister ? (
+          <form
+            method="post"
+            action="/api/auth/google"
+            onSubmit={(event) => {
+              if (!consentChecked) {
+                event.preventDefault();
+                setError("consent_required");
+              }
+            }}
+          >
+            <input type="hidden" name="lang" value={lang} />
+            <input type="hidden" name="role" value={role} />
+            <input type="hidden" name="next" value={`/${lang}/onboarding`} />
+            <input type="hidden" name="consent" value={consentChecked ? "1" : "0"} />
+            <button type="submit" className={styles.social}>
+              <GoogleLogo />
+              {m.google}
+            </button>
+          </form>
+        ) : (
+          <a className={styles.social} href={`/api/auth/google?${googleParams.toString()}`}>
+            <GoogleLogo />
+            {m.google}
+          </a>
+        )}
 
         {telegramBot ? (
           <div className={styles.telegramBox}>
