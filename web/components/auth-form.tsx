@@ -50,8 +50,10 @@ export function AuthForm({ mode, lang, m, consent, telegramBot, next, initialErr
   const [consentChecked, setConsentChecked] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(initialError ?? null);
+  const [sent, setSent] = useState(false);
   const isRegister = mode === "register";
-  const errorText = error ? (m.errors[error as keyof typeof m.errors] ?? m.errors.server_error) : null;
+  // Own keys only: "constructor" or "toString" must not count as known error codes.
+  const errorText = error ? (Object.hasOwn(m.errors, error) ? m.errors[error as keyof typeof m.errors] : m.errors.server_error) : null;
 
   async function post(url: string, payload: Record<string, unknown>) {
     setPending(true);
@@ -64,19 +66,13 @@ export function AuthForm({ mode, lang, m, consent, telegramBot, next, initialErr
       });
       const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: { code?: string } } | null;
       if (res.ok && data?.ok) {
-        // Registration answers identically for taken addresses (no account enumeration), so check for a session.
-        if (isRegister && !(await fetch("/api/auth/me", { cache: "no-store" })).ok) {
-          setError("check_email");
+        // Sign-up only sends a link (the same answer for new and taken addresses); the account is created from it.
+        if (isRegister) {
+          setSent(true);
           return;
         }
-        // New accounts continue to the role-specific profile step; returning users go where they were headed.
-        router.replace(
-          isRegister
-            ? `/${lang}/onboarding`
-            : next && next.startsWith("/") && !next.startsWith("//")
-              ? next
-              : `/${lang}`,
-        );
+        // Returning users go where they were headed.
+        router.replace(next && next.startsWith("/") && !next.startsWith("//") ? next : `/${lang}`);
         router.refresh();
         return;
       }
@@ -91,16 +87,10 @@ export function AuthForm({ mode, lang, m, consent, telegramBot, next, initialErr
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const payload: Record<string, unknown> = {
-      email: String(form.get("email") ?? ""),
-      password: String(form.get("password") ?? ""),
-    };
-    if (isRegister) {
-      payload.displayName = String(form.get("displayName") ?? "");
-      payload.role = role;
-      payload.consent = consentChecked;
-      payload.lang = lang;
-    }
+    const email = String(form.get("email") ?? "");
+    const payload: Record<string, unknown> = isRegister
+      ? { email, role, consent: consentChecked, lang }
+      : { email, password: String(form.get("password") ?? "") };
     void post(isRegister ? "/api/auth/register" : "/api/auth/login", payload);
   }
 
@@ -112,6 +102,19 @@ export function AuthForm({ mode, lang, m, consent, telegramBot, next, initialErr
   const other = isRegister
     ? { text: m.haveAccount, link: m.signIn, href: `/${lang}/login` }
     : { text: m.noAccount, link: m.createAccount, href: `/${lang}/register` };
+
+  if (sent) {
+    return (
+      <>
+        <p className={styles.notice} role="status">
+          {m.registerSent}
+        </p>
+        <p className={styles.switch}>
+          {m.haveAccount} <a href={`/${lang}/login`}>{m.signIn}</a>
+        </p>
+      </>
+    );
+  }
 
   return (
     <>
@@ -136,15 +139,6 @@ export function AuthForm({ mode, lang, m, consent, telegramBot, next, initialErr
           </fieldset>
         ) : null}
 
-        {isRegister ? (
-          <div className={styles.field}>
-            <label htmlFor={`${uid}-name`}>
-              {m.name} <span className={styles.optional}>({m.nameOptional})</span>
-            </label>
-            <input id={`${uid}-name`} name="displayName" className={styles.input} autoComplete="name" maxLength={80} />
-          </div>
-        ) : null}
-
         <div className={styles.field}>
           <label htmlFor={`${uid}-email`}>{m.email}</label>
           <input
@@ -155,39 +149,41 @@ export function AuthForm({ mode, lang, m, consent, telegramBot, next, initialErr
             autoComplete="email"
             inputMode="email"
             maxLength={254}
+            aria-describedby={isRegister ? `${uid}-email-hint` : undefined}
             required
           />
-        </div>
-
-        <div className={styles.field}>
-          <label htmlFor={`${uid}-password`}>{m.password}</label>
-          <div className={styles.passwordWrap}>
-            <input
-              id={`${uid}-password`}
-              name="password"
-              type={showPassword ? "text" : "password"}
-              className={styles.input}
-              autoComplete={isRegister ? "new-password" : "current-password"}
-              minLength={isRegister ? 10 : undefined}
-              maxLength={128}
-              aria-describedby={isRegister ? `${uid}-hint` : undefined}
-              required
-            />
-            <button
-              type="button"
-              className={styles.toggle}
-              onClick={() => setShowPassword((v) => !v)}
-              aria-pressed={showPassword}
-            >
-              {showPassword ? m.hidePassword : m.showPassword}
-            </button>
-          </div>
           {isRegister ? (
-            <p id={`${uid}-hint`} className={styles.hint}>
-              {m.passwordHint}
+            <p id={`${uid}-email-hint`} className={styles.hint}>
+              {m.registerEmailHint}
             </p>
           ) : null}
         </div>
+
+        {/* The password is chosen on the page the mailed link opens, by the person who controls the address. */}
+        {isRegister ? null : (
+          <div className={styles.field}>
+            <label htmlFor={`${uid}-password`}>{m.password}</label>
+            <div className={styles.passwordWrap}>
+              <input
+                id={`${uid}-password`}
+                name="password"
+                type={showPassword ? "text" : "password"}
+                className={styles.input}
+                autoComplete="current-password"
+                maxLength={128}
+                required
+              />
+              <button
+                type="button"
+                className={styles.toggle}
+                onClick={() => setShowPassword((v) => !v)}
+                aria-pressed={showPassword}
+              >
+                {showPassword ? m.hidePassword : m.showPassword}
+              </button>
+            </div>
+          </div>
+        )}
 
         {isRegister ? (
           <div className={styles.consent}>

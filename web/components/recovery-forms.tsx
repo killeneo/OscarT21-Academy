@@ -6,7 +6,7 @@ import styles from "./auth.module.css";
 
 type Props = { lang: string; m: Messages["auth"]; r: Messages["recovery"] };
 
-async function postJson(url: string, payload: Record<string, unknown>) {
+export async function postJson(url: string, payload: Record<string, unknown>) {
   try {
     const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: { code?: string } } | null;
@@ -20,7 +20,7 @@ async function postJson(url: string, payload: Record<string, unknown>) {
  * The single-use token arrives in the e-mailed link (?token=…). Once the page has it, drop it from the address bar
  * so it does not stay in browser history, synced history or screenshots. The form keeps it in memory.
  */
-function useStripTokenFromUrl() {
+export function useStripTokenFromUrl() {
   useEffect(() => {
     const url = new URL(window.location.href);
     if (!url.searchParams.has("token")) return;
@@ -29,8 +29,9 @@ function useStripTokenFromUrl() {
   }, []);
 }
 
-function ErrorBox({ m, code }: { m: Messages["auth"]; code: string | null }) {
-  const text = code ? (m.errors[code as keyof typeof m.errors] ?? m.errors.server_error) : null;
+export function ErrorBox({ m, code }: { m: Messages["auth"]; code: string | null }) {
+  // Own keys only: "constructor" or "toString" must not count as known error codes.
+  const text = code ? (Object.hasOwn(m.errors, code) ? m.errors[code as keyof typeof m.errors] : m.errors.server_error) : null;
   return (
     <div aria-live="polite">
       {text ? (
@@ -161,12 +162,18 @@ export function ResetForm({ lang, m, r, token }: Props & { token: string }) {
   );
 }
 
-/** E-mail confirmation needs a click on a button (POST), so mail scanners cannot use the link up. */
-export function VerifyConfirm({ lang, m, r, token }: Props & { token: string }) {
+/**
+ * E-mail confirmation needs a click on a button (POST), so mail scanners cannot use the link up, and it works only
+ * in the account's own session: a visitor who is not signed in is asked to sign in first (the link survives as the
+ * post-login destination).
+ */
+export function VerifyConfirm({ lang, m, r, token, signedIn }: Props & { token: string; signedIn: boolean }) {
   const [pending, setPending] = useState(false);
   const [done, setDone] = useState(false);
+  const [needsLogin, setNeedsLogin] = useState(!signedIn);
   const [error, setError] = useState<string | null>(null);
   useStripTokenFromUrl();
+  const loginHref = `/${lang}/login?${new URLSearchParams({ next: `/${lang}/verify-email?${new URLSearchParams({ token })}` })}`;
 
   async function confirm() {
     setPending(true);
@@ -174,7 +181,24 @@ export function VerifyConfirm({ lang, m, r, token }: Props & { token: string }) 
     const res = await postJson("/api/auth/verify/confirm", { token });
     setPending(false);
     if (res.ok) setDone(true);
+    else if (res.code === "unauthorized") setNeedsLogin(true);
     else setError(res.code);
+  }
+
+  if (needsLogin) {
+    return (
+      <>
+        <p className={styles.notice} role="status">
+          {r.verifySignIn}
+        </p>
+        <p className={styles.hint}>{r.verifyNotYou}</p>
+        <p className={styles.actionsRow} style={{ marginTop: 20 }}>
+          <a href={loginHref} className={styles.submit}>
+            {r.verifySignInLink}
+          </a>
+        </p>
+      </>
+    );
   }
 
   if (done) {
@@ -195,6 +219,7 @@ export function VerifyConfirm({ lang, m, r, token }: Props & { token: string }) 
   return (
     <>
       <ErrorBox m={m} code={error} />
+      <p className={styles.hint}>{r.verifyNotYou}</p>
       <button type="button" className={styles.submit} onClick={() => void confirm()} disabled={pending}>
         {pending ? m.submitting : r.verifySubmit}
       </button>

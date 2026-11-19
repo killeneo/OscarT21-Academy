@@ -17,6 +17,7 @@ export type ErrorCode =
   | "consent_required"
   | "invalid_token"
   | "profile_locked"
+  | "account_exists"
   | "unauthorized"
   | "server_error";
 

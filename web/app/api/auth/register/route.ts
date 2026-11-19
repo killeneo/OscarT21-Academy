@@ -1,14 +1,17 @@
-import { CONSENT_VERSION, DEFAULT_ROLE, isSelfRole } from "@/lib/auth/config";
-import { fail, hasSameOrigin, ok, parseDisplayName, parseEmail, parseLocale, readJson } from "@/lib/auth/http";
-import { sendAccountExistsEmail, sendVerificationEmail } from "@/lib/auth/mailer";
+import { DEFAULT_ROLE, isSelfRole } from "@/lib/auth/config";
 import { afterResponse } from "@/lib/auth/background";
-import { trustDevice } from "@/lib/auth/devices";
-import { PasswordHashBusyError, checkPasswordPolicy, hashPassword } from "@/lib/auth/password";
+import { fail, hasSameOrigin, ok, parseEmail, parseLocale, readJson } from "@/lib/auth/http";
+import { sendAccountExistsEmail, sendSignupEmail } from "@/lib/auth/mailer";
 import { allow, allowPerIp, hashKey } from "@/lib/auth/rate-limit";
-import { createSession } from "@/lib/auth/session";
-import { issueToken } from "@/lib/auth/tokens";
-import { createPasswordUser } from "@/lib/auth/users";
+import { createSignupRequest } from "@/lib/auth/signup";
+import { findUserByEmail } from "@/lib/auth/users";
 
+/**
+ * Sign-up, step 1: takes only an e-mail address (plus the role to preselect on the next step and the visitor's
+ * consent to process the address) and mails a link. The answer, its headers and its timing are the same whether
+ * or not the address already has an account: the lookup and the mail happen after the response, no session is
+ * created, and nothing is stored for a taken address. The account itself is created by /register/complete.
+ */
 export async function POST(req: Request) {
   try {
     if (!hasSameOrigin(req)) return fail("forbidden_origin", 403);
@@ -16,38 +19,24 @@ export async function POST(req: Request) {
 
     const body = await readJson(req);
     const email = parseEmail(body?.email);
-    const password = typeof body?.password === "string" ? body.password : null;
-    const displayName = parseDisplayName(body?.displayName);
     const role = body?.role === undefined ? DEFAULT_ROLE : body.role;
-    if (!email || password === null || displayName === null || !isSelfRole(role)) return fail("invalid_input", 400);
-
-    // Registration requires explicit consent to personal-data processing.
+    if (!email || !isSelfRole(role)) return fail("invalid_input", 400);
     if (body?.consent !== true) return fail("consent_required", 400);
-
-    const policy = checkPasswordPolicy(password, email);
-    if (policy) return fail(policy, 400);
-
-    const userId = await createPasswordUser({ email, passwordHash: await hashPassword(password), displayName, role, consentVersion: CONSENT_VERSION });
-    if (!userId) {
-      // Same answer as for a new account, so this form cannot be used to find out which e-mails are registered.
-      // The real owner is told by e-mail; no session is created. At most one such notice per address per day
-      // (silently skipped beyond that), so the form cannot be used to flood someone's inbox. Sent after the
-      // response so its duration does not tell the two cases apart.
-      const lang = parseLocale(body?.lang);
-      afterResponse("account-exists e-mail", async () => {
-        if (await allow(`register:exists:${hashKey(email)}`, 1, 86400)) await sendAccountExistsEmail(email, lang);
-      });
-      return ok({ user: { email, displayName, role } }, 201);
-    }
-
-    await createSession(userId);
-    await trustDevice(userId);
-    // E-mail confirmation is best effort and runs after the response: a mail failure must not block the account.
     const lang = parseLocale(body?.lang);
-    afterResponse("verification e-mail", async () => sendVerificationEmail(email, lang, await issueToken(userId, "verify_email")));
-    return ok({ user: { email, displayName, role } }, 201);
+
+    // At most 3 mails per address per day, silently: the form cannot be used to flood someone's inbox.
+    if (!(await allow(`register:email:${hashKey(email)}`, 3, 86400))) return ok({}, 202);
+
+    afterResponse("sign-up e-mail", async () => {
+      if (await findUserByEmail(email)) {
+        // The owner is told someone tried; at most one such notice per address per day.
+        if (await allow(`register:exists:${hashKey(email)}`, 1, 86400)) await sendAccountExistsEmail(email, lang);
+        return;
+      }
+      await sendSignupEmail(email, lang, await createSignupRequest(email), role);
+    });
+    return ok({}, 202);
   } catch (err) {
-    if (err instanceof PasswordHashBusyError) return fail("rate_limited", 503);
     console.error("register failed:", err instanceof Error ? err.message : "unknown error");
     return fail("server_error", 500);
   }

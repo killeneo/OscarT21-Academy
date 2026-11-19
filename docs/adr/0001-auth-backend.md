@@ -36,8 +36,16 @@ dependency (`pg`).
   without password fields; the CSP allows `telegram.org` only there.
 - **Account linking:** a verified Google email is linked to an existing account by email only for Google-owned
   domains (`gmail.com`, `googlemail.com`); other domains can change hands when they expire, so those users sign in
-  with their password. If the matching account was an unverified password account its password is cleared and its
-  sessions revoked (pre-hijacking mitigation).
+  with their password. Linking always ends the account's sessions and remembered devices. If the account was never
+  verified its password is cleared too (pre-hijacking mitigation); if it has a password, the owner gets an e-mail.
+- **Password sign-up is e-mail-first** (re-audit R-01/R-02, migration `0008`): step 1 (`POST /api/auth/register`)
+  takes only the address, the role to preselect and consent, and answers `202` with no cookies for new and taken
+  addresses alike; a link (24 h, single use, SHA-256 stored in `signup_requests`) or an "account exists" notice is
+  mailed after the response. Step 2 (`POST /api/auth/register/complete`, page `/[lang]/register/complete`) is done by
+  whoever controls the mailbox: they choose password, name and role and give their own consent; the account is created
+  already verified and signed in. Nobody can pre-register someone else's address with a password.
+- **E-mail confirmation** of older unverified accounts works only in the account's own session; a signed-out visitor
+  is asked to sign in first, and another account's session is refused.
 - **CSRF:** `SameSite=Lax` + `Origin` must match the configured site origin or `Host` (`X-Forwarded-Host` only behind
   a trusted proxy) + JSON-only bodies on state-changing routes.
 - **Abuse:** database-backed rate limits per account / hashed e-mail and per client IP. The client IP comes only from a
@@ -57,16 +65,18 @@ dependency (`pg`).
   `MAIL_TRANSPORT=console` on a localhost production build) and are not sent in production until a provider is approved
   and wired into `web/lib/auth/mailer.ts`. Confirmation is POST-only so link scanners cannot consume the token.
 - **Verification gates:** sending a specialist profile for review and creating an organization need a confirmed
-  e-mail. Until a mail provider exists in production, those steps cannot be completed there. Sign-up still reveals
-  whether an e-mail is taken (a session is created for new accounts); accepted for the MVP, throttled by rate limits.
-- **Consent:** registration (password, Google, Telegram) requires explicit consent to personal-data processing;
+  e-mail. Password sign-ups are verified by construction; the gates matter for accounts created before `0008`.
+- **No mail provider = no password sign-up in production.** Until a provider is wired in, new users there can only
+  use Google or Telegram.
+- **Consent:** registration (password, Google, Telegram) requires explicit consent to personal-data processing (for
+  password sign-up: at step 1 to process the address, and again by the address owner at step 2);
   the consent version and time are stored on the user (`privacy_consent_*`). The privacy policy page is a **draft**
   that a lawyer must review before launch.
 - **Onboarding:** after sign-up each role fills a minimal profile (`/onboarding`). A specialist profile is saved as
   `draft` or sent as `submitted`; the client can never set verification status or publish. Document upload and
   the moderator queue are not built yet.
-- **Deployment checklist:** set `TRUSTED_IP_HEADER` (or rely on Vercel), run migrations up to `0007`, set
+- **Deployment checklist:** set `TRUSTED_IP_HEADER` (or rely on Vercel), run migrations up to `0008`, set
   `NEXT_PUBLIC_SITE_URL`, keep `MAIL_TRANSPORT` unset on real hosts.
 - Hosting: PostgreSQL and the app must be placed only after the legal data-residency review.
 - Permission matrix for non-auth resources is still to be written before more modules are added.
-- Security review: `docs/security/2026-11-audit.md` (findings and their status).
+- Security review: `docs/security/2026-11-audit.md` and `docs/security/2026-11-19-reaudit.md` (findings and their status).

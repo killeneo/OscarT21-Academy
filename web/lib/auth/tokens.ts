@@ -54,14 +54,18 @@ export async function peekToken(token: string, purpose: TokenPurpose): Promise<{
   return rows[0] ? { userId: rows[0].user_id, email: rows[0].email } : null;
 }
 
-/** Atomically marks a valid token as used. Returns the owner, or null if invalid, expired or already used. */
-export async function consumeToken(token: string, purpose: TokenPurpose): Promise<{ userId: string } | null> {
+/**
+ * Atomically marks a valid token as used. Returns the owner, or null if invalid, expired or already used.
+ * With `userId`, only a token issued to that user is accepted; a token of another account is left untouched.
+ */
+export async function consumeToken(token: string, purpose: TokenPurpose, userId?: string): Promise<{ userId: string } | null> {
   if (!token || token.length > 200) return null;
   const { rows } = await db().query<{ user_id: string }>(
     `UPDATE email_tokens SET used_at = now()
       WHERE token_hash = $1 AND purpose = $2 AND used_at IS NULL AND expires_at > now()
+        AND ($3::uuid IS NULL OR user_id = $3::uuid)
       RETURNING user_id`,
-    [sha256(token), purpose],
+    [sha256(token), purpose, userId ?? null],
   );
   return rows[0] ? { userId: rows[0].user_id } : null;
 }

@@ -40,7 +40,7 @@ async function Body({ mode, lang, searchParams }: Props) {
       consent={getMessages(lang).consent}
       telegramBot={telegramBot}
       next={next ? safeNextPath(next, lang) : undefined}
-      initialError={error && error in m.errors ? error : undefined}
+      initialError={error && Object.hasOwn(m.errors, error) ? error : undefined}
       initialRole={isSelfRole(roleParam) ? roleParam : undefined}
     />
   );

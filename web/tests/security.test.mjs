@@ -61,9 +61,38 @@ async function post(path, body, { cookie, origin = BASE, raw, headers = {} } = {
   return { status: res.status, json, text, headers: res.headers, setCookie, session };
 }
 
+/** A sign-up link for `email`, planted in place of the mailed one (the raw token is only ever in the e-mail). */
+async function signupToken(email, ttlSeconds = 3600) {
+  const token = randomBytes(32).toString("base64url");
+  await db.query("INSERT INTO signup_requests (token_hash, email, expires_at) VALUES ($1, $2, now() + make_interval(secs => $3))", [sha256(token), email, ttlSeconds]);
+  return token;
+}
+
+/** Sign-up step 1: only an address (plus preselected role and consent). */
+const startSignup = (email, extra = {}) => post("/api/auth/register", { email, role: "parent", consent: true, lang: "ru", ...extra });
+
+/** Full sign-up through the link (step 2). The account is verified and signed in. */
 async function register(email = uniq(), extra = {}) {
-  const r = await post("/api/auth/register", { email, password: PASSWORD, displayName: "Test", role: "parent", consent: true, lang: "ru", ...extra });
-  return { email, ...r };
+  const token = await signupToken(email);
+  const r = await post("/api/auth/register/complete", { token, password: PASSWORD, displayName: "Test", role: "parent", consent: true, ...extra });
+  return { email, token, ...r };
+}
+
+/** An account whose e-mail was never confirmed (only accounts from before e-mail-first sign-up are like this). */
+async function unverified(email = uniq(), extra = {}) {
+  const r = await register(email, extra);
+  await db.query("UPDATE users SET email_verified_at = NULL WHERE email = $1", [email]);
+  return r;
+}
+
+/** Waits for work the server does after the response (`after()`), e.g. creating the sign-up link. */
+async function eventually(check, ms = 5000) {
+  const until = Date.now() + ms;
+  for (;;) {
+    if (await check()) return true;
+    if (Date.now() > until) return false;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
 }
 
 // Tell the suite how the server is configured (TRUSTED_IP_HEADER, as set on the server). Behind a trusted proxy that
@@ -79,7 +108,9 @@ const categorySlug = async () => (await db.query("SELECT slug FROM specialist_ca
 describe("security (black-box)", { skip: !up || !db ? "server or database not reachable" : false }, () => {
   beforeEach(resetLimits); // each test starts with fresh rate-limit counters (10 sign-ups/hour per IP would otherwise trip)
   after(async () => {
-    await db.query("DELETE FROM users WHERE email LIKE $1", [`%@${DOMAIN}`]);
+    await db.query("DELETE FROM users WHERE email LIKE $1 OR email LIKE 'sectest-%@gmail.com'", [`%@${DOMAIN}`]);
+    await db.query("DELETE FROM signup_requests WHERE email LIKE $1 OR email LIKE 'sectest-%@gmail.com'", [`%@${DOMAIN}`]);
+    await globalThis.__authPool?.end(); // pool of lib/auth/db.ts, used by the account-linking test
     await resetLimits();
     await db.end();
   });
@@ -133,7 +164,7 @@ describe("security (black-box)", { skip: !up || !db ? "server or database not re
   });
 
   describe("CSRF / origin checks", () => {
-    const routes = ["/api/auth/login", "/api/auth/register", "/api/auth/logout", "/api/auth/password/forgot", "/api/auth/password/reset", "/api/auth/verify/confirm", "/api/auth/verify/request", "/api/profile/onboarding", "/api/auth/telegram"];
+    const routes = ["/api/auth/login", "/api/auth/register", "/api/auth/register/complete", "/api/auth/logout", "/api/auth/password/forgot", "/api/auth/password/reset", "/api/auth/verify/confirm", "/api/auth/verify/request", "/api/profile/onboarding", "/api/auth/telegram"];
     for (const route of routes) {
       test(`${route}: no Origin or a foreign Origin is refused`, async () => {
         const none = await post(route, { email: "a@b.co", password: "x" }, { origin: null });
@@ -187,7 +218,8 @@ describe("security (black-box)", { skip: !up || !db ? "server or database not re
 
     test("NUL and control characters are bad input, never a server error", async () => {
       assert.equal((await post("/api/auth/login", { email: "a\u0000b@example.com", password: "x".repeat(12) })).status, 400);
-      assert.equal((await post("/api/auth/register", { email: uniq(), password: PASSWORD, displayName: "a\u0000b", consent: true })).status, 400);
+      assert.equal((await register(uniq(), { displayName: "a\u0000b" })).status, 400);
+      assert.equal((await startSignup("a\u0000b@example.com")).status, 400);
       assert.equal((await fetch(`${BASE}/ru/specialists?q=${encodeURIComponent("a\u0000b")}`)).status, 200);
     });
 
@@ -249,7 +281,57 @@ describe("security (black-box)", { skip: !up || !db ? "server or database not re
       assert.equal(r.status, 201);
       const { rows } = await db.query("SELECT role, email_verified_at, status FROM users WHERE email = $1", [r.email]);
       assert.equal(rows[0].role, "parent");
-      assert.equal(rows[0].email_verified_at, null, "e-mail must stay unverified until the link is used");
+      assert.ok(rows[0].email_verified_at > new Date(Date.now() - 3600_000), "verified by using the link, not by the request field");
+      assert.equal((await startSignup(uniq(), { role: "admin" })).status, 400, "step 1 refuses privileged roles too");
+    });
+
+    test("step 1 creates no account and no session; the account appears only when the link is used", async () => {
+      const email = uniq();
+      const start = await startSignup(email, { password: PASSWORD, displayName: "Early" });
+      assert.equal(start.status, 202);
+      assert.deepEqual(start.setCookie, [], "no cookies at step 1");
+      assert.equal((await db.query("SELECT 1 FROM users WHERE email = $1", [email])).rowCount, 0);
+      assert.ok(await eventually(async () => (await db.query("SELECT 1 FROM signup_requests WHERE email = $1 AND used_at IS NULL", [email])).rowCount === 1), "a link is issued");
+      const columns = (await db.query("SELECT column_name FROM information_schema.columns WHERE table_name = 'signup_requests'")).rows.map((r) => r.column_name);
+      assert.ok(!columns.some((c) => /password|role|name/.test(c)), "step 1 stores nothing the address owner did not choose");
+      assert.equal((await startSignup(uniq(), { consent: false })).status, 400);
+    });
+
+    test("the sign-up link is single use, expires, and is the only source of the e-mail", async () => {
+      const email = uniq();
+      const token = await signupToken(email);
+      const done = await post("/api/auth/register/complete", { token, password: PASSWORD, role: "specialist", consent: true, email: `other-${email}` });
+      assert.equal(done.status, 201, done.text);
+      assert.equal(done.json.user.email, email);
+      assert.ok(done.session, "signed in after completing");
+      assert.equal((await db.query("SELECT 1 FROM users WHERE email = $1", [`other-${email}`])).rowCount, 0);
+      const { rows } = await db.query("SELECT role, email_verified_at, privacy_consent_version FROM users WHERE email = $1", [email]);
+      assert.equal(rows[0].role, "specialist", "the role is chosen at step 2");
+      assert.ok(rows[0].email_verified_at && rows[0].privacy_consent_version);
+      const again = await post("/api/auth/register/complete", { token, password: PASSWORD, consent: true });
+      assert.equal(again.status, 400);
+      assert.equal(again.json?.error?.code, "invalid_token");
+      const expired = await signupToken(uniq(), -60);
+      assert.equal((await post("/api/auth/register/complete", { token: expired, password: PASSWORD, consent: true })).status, 400);
+      assert.equal((await post("/api/auth/register/complete", { token: "nope", password: PASSWORD, consent: true })).status, 400);
+      const noConsent = await signupToken(uniq());
+      assert.equal((await post("/api/auth/register/complete", { token: noConsent, password: PASSWORD, consent: false })).json?.error?.code, "consent_required");
+      assert.equal((await fetch(`${BASE}/api/auth/register/complete?token=${noConsent}`)).status, 405);
+    });
+
+    test("using one link closes the others; a link for an address that got an account meanwhile says so", async () => {
+      const email = uniq();
+      const first = await signupToken(email);
+      const second = await signupToken(email);
+      assert.equal((await post("/api/auth/register/complete", { token: first, password: PASSWORD, consent: true })).status, 201);
+      assert.equal((await post("/api/auth/register/complete", { token: second, password: PASSWORD, consent: true })).status, 400);
+      const other = uniq();
+      const link = await signupToken(other);
+      await db.query("INSERT INTO users (email, display_name) VALUES ($1, 'Existing')", [other]);
+      const clash = await post("/api/auth/register/complete", { token: link, password: PASSWORD, consent: true });
+      assert.equal(clash.status, 409);
+      assert.equal(clash.json?.error?.code, "account_exists");
+      assert.equal(clash.session, undefined);
     });
 
     test("consent is mandatory and weak passwords are refused", async () => {
@@ -285,26 +367,34 @@ describe("security (black-box)", { skip: !up || !db ? "server or database not re
   describe("password blocklist", () => {
     test("common passwords and the e-mail's own name are refused at sign-up", async () => {
       for (const password of ["1234567890", "Qwertyuiop", "password123"]) {
-        const r = await post("/api/auth/register", { email: uniq(), password, consent: true, lang: "ru" });
+        const r = await register(uniq(), { password });
         assert.equal(r.status, 400, password);
         assert.equal(r.json?.error?.code, "common_password", password);
         assert.equal(r.session, undefined);
       }
       const email = uniq();
-      const own = await post("/api/auth/register", { email, password: email.split("@")[0], consent: true, lang: "ru" });
+      const own = await register(email, { password: email.split("@")[0] });
       assert.equal(own.json?.error?.code, "common_password");
     });
   });
 
   describe("account enumeration and timing", () => {
-    test("registering a taken e-mail looks identical to a new one and creates no session", async () => {
-      const first = await register();
-      const again = await register(first.email, { displayName: "Attacker" });
-      assert.equal(again.status, first.status);
-      assert.deepEqual(Object.keys(again.json).sort(), Object.keys(first.json).sort());
-      assert.equal(again.session, undefined, "no session may be issued for an existing account");
-      const owner = await db.query("SELECT display_name FROM users WHERE email = $1", [first.email]);
-      assert.equal(owner.rows[0].display_name, "Test", "the existing account must not be modified");
+    test("sign-up answers identically for a taken and a new address (body, status, cookies) and changes nothing", async () => {
+      const taken = await register();
+      const fresh = uniq();
+      const a = await startSignup(fresh);
+      const b = await startSignup(taken.email, { role: "organization" });
+      assert.equal(a.status, 202);
+      assert.equal(b.status, a.status);
+      assert.equal(b.text, a.text);
+      assert.deepEqual(b.setCookie, a.setCookie);
+      assert.deepEqual(a.setCookie, []);
+      assert.ok(await eventually(async () => (await db.query("SELECT 1 FROM signup_requests WHERE email = $1", [fresh])).rowCount === 1));
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const open = await db.query("SELECT 1 FROM signup_requests WHERE email = $1 AND used_at IS NULL", [taken.email]);
+      assert.equal(open.rowCount, 0, "no link is issued for an address that has an account");
+      const owner = await db.query("SELECT display_name, role FROM users WHERE email = $1", [taken.email]);
+      assert.deepEqual(owner.rows[0], { display_name: "Test", role: "parent" }, "the existing account must not be modified");
     });
 
     test("login: unknown e-mail and wrong password are indistinguishable", async () => {
@@ -456,6 +546,9 @@ describe("security (black-box)", { skip: !up || !db ? "server or database not re
       const codes = [];
       for (let i = 0; i < 14; i++) codes.push((await post("/api/auth/password/forgot", { email: uniq() })).status);
       assert.ok(codes.includes(429), codes.join(","));
+      const signups = [];
+      for (let i = 0; i < 12; i++) signups.push((await startSignup(uniq())).status);
+      assert.ok(signups.includes(429), signups.join(","));
     });
   });
 
@@ -533,15 +626,57 @@ describe("security (black-box)", { skip: !up || !db ? "server or database not re
       assert.equal(rowCount, 0);
     });
 
-    test("e-mail verification needs a valid token and a GET cannot consume it", async () => {
+    test("e-mail confirmation needs a POST, a valid token and the account's own session (no pre-hijacking)", async () => {
       await resetLimits();
-      const r = await register();
+      const r = await unverified();
+      const stranger = await register();
       const token = await issue(await idOf(r.email), "verify_email");
+      const isVerified = async () => (await db.query("SELECT email_verified_at FROM users WHERE email = $1", [r.email])).rows[0].email_verified_at !== null;
       const get = await fetch(`${BASE}/api/auth/verify/confirm?token=${token}`);
       assert.equal(get.status, 405);
-      assert.equal((await post("/api/auth/verify/confirm", { token: "nope" })).status, 400);
-      assert.equal((await post("/api/auth/verify/confirm", { token })).status, 200);
-      assert.equal((await post("/api/auth/verify/confirm", { token })).status, 400, "single use");
+      const anonymous = await post("/api/auth/verify/confirm", { token });
+      assert.equal(anonymous.status, 401, "the address owner clicking a link for someone else's account confirms nothing");
+      assert.equal(await isVerified(), false);
+      assert.equal((await post("/api/auth/verify/confirm", { token }, { cookie: stranger.session })).status, 400, "another account's session");
+      assert.equal(await isVerified(), false);
+      assert.equal((await post("/api/auth/verify/confirm", { token: "nope" }, { cookie: r.session })).status, 400);
+      assert.equal((await post("/api/auth/verify/confirm", { token }, { cookie: r.session })).status, 200, "the token was left unused by the refusals");
+      assert.equal(await isVerified(), true);
+      assert.equal((await post("/api/auth/verify/confirm", { token }, { cookie: r.session })).status, 400, "single use");
+    });
+  });
+
+  describe("account linking", () => {
+    test("Google linking to an existing account ends its sessions and devices; a never-verified one also loses its password", async () => {
+      const { findOrCreateOAuthUser } = await import("../lib/auth/users.ts");
+      const gmail = () => `sectest-${randomBytes(5).toString("hex")}@gmail.com`; // never mailed: linking sends nothing
+      const sub = () => `sectest-${randomBytes(8).toString("hex")}`;
+      const state = async (email) =>
+        (await db.query(
+          `SELECT u.password_hash IS NOT NULL AS has_pw, u.email_verified_at IS NOT NULL AS verified,
+                  (SELECT count(*)::int FROM sessions s WHERE s.user_id = u.id) AS sessions,
+                  (SELECT count(*)::int FROM trusted_devices d WHERE d.user_id = u.id) AS devices
+             FROM users u WHERE u.email = $1`,
+          [email],
+        )).rows[0];
+
+      const owner = await register(gmail());
+      assert.deepEqual(await state(owner.email), { has_pw: true, verified: true, sessions: 1, devices: 1 });
+      const linked = await findOrCreateOAuthUser("google", sub(), { email: owner.email, emailVerified: true, displayName: "G" }, "parent", null);
+      assert.equal(linked.ok, true);
+      assert.equal(linked.linkedToPassword, true, "the owner is to be notified");
+      assert.deepEqual(await state(owner.email), { has_pw: true, verified: true, sessions: 0, devices: 0 });
+      assert.equal((await fetch(`${BASE}/api/auth/me`, { headers: { Cookie: owner.session } })).status, 401);
+
+      const legacy = await unverified(gmail());
+      const claimed = await findOrCreateOAuthUser("google", sub(), { email: legacy.email, emailVerified: true, displayName: "G" }, "parent", null);
+      assert.equal(claimed.ok, true);
+      assert.equal(claimed.linkedToPassword, undefined);
+      assert.deepEqual(await state(legacy.email), { has_pw: false, verified: true, sessions: 0, devices: 0 }, "pre-registered password and sessions are gone");
+
+      const corp = await register();
+      const refused = await findOrCreateOAuthUser("google", sub(), { email: corp.email, emailVerified: true, displayName: "G" }, "parent", null);
+      assert.deepEqual(refused, { ok: false, reason: "link_requires_password" }, "non-Google domains are never linked by e-mail");
     });
   });
 
@@ -594,7 +729,7 @@ describe("security (black-box)", { skip: !up || !db ? "server or database not re
     });
 
     test("an unconfirmed e-mail can save a draft but not send it for review or create an organization", async () => {
-      const spec = await register(uniq(), { role: "specialist" });
+      const spec = await unverified(uniq(), { role: "specialist" });
       const p = { displayName: "Spec", category: await categorySlug(), headline: "Hello", city: "tashkent", formats: ["online"], experienceYears: 3, priceFrom: 100000, priceTo: 200000, ageMin: 3, ageMax: 12 };
       assert.equal((await post("/api/profile/onboarding", { ...p, submit: false }, { cookie: spec.session })).status, 200, "draft");
       const refused = await post("/api/profile/onboarding", { ...p, submit: true }, { cookie: spec.session });
@@ -605,7 +740,7 @@ describe("security (black-box)", { skip: !up || !db ? "server or database not re
       await verifyEmail(spec.email);
       assert.equal((await post("/api/profile/onboarding", { ...p, submit: true }, { cookie: spec.session })).status, 200, "after confirmation");
 
-      const org = await register(uniq(), { role: "organization" });
+      const org = await unverified(uniq(), { role: "organization" });
       const o = { name: "Test School", orgType: "school", city: "tashkent" };
       assert.equal((await post("/api/profile/onboarding", o, { cookie: org.session })).status, 403);
       assert.equal((await db.query("SELECT 1 FROM organizations WHERE owner_user_id = (SELECT id FROM users WHERE email = $1)", [org.email])).rowCount, 0);

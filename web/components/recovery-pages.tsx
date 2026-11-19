@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { getSessionUser } from "@/lib/auth/session";
 import { getMessages, type Locale } from "@/lib/i18n";
 import { AuthShell } from "./auth-shell";
 import { ForgotForm, ResetForm, VerifyConfirm } from "./recovery-forms";
@@ -36,11 +37,10 @@ async function TokenBody({ lang, searchParams, kind }: { lang: Locale; searchPar
       </>
     );
   }
-  return kind === "reset" ? (
-    <ResetForm lang={lang} m={m.auth} r={m.recovery} token={token} />
-  ) : (
-    <VerifyConfirm lang={lang} m={m.auth} r={m.recovery} token={token} />
-  );
+  if (kind === "reset") return <ResetForm lang={lang} m={m.auth} r={m.recovery} token={token} />;
+  // Confirming needs the account's own session (checked again by the API); without one the page asks to sign in.
+  const signedIn = (await getSessionUser().catch(() => null)) !== null;
+  return <VerifyConfirm lang={lang} m={m.auth} r={m.recovery} token={token} signedIn={signedIn} />;
 }
 
 export function TokenPage({ lang, searchParams, kind }: { lang: Locale; searchParams: Query; kind: "reset" | "verify" }) {

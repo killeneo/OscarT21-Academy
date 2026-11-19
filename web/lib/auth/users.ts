@@ -1,7 +1,7 @@
 import type { PoolClient } from "pg";
-import { db } from "./db";
-import type { SelfRole } from "./config";
-import { isGoogleOwnedEmail } from "./google-email";
+import { db } from "./db.ts";
+import type { SelfRole } from "./config.ts";
+import { isGoogleOwnedEmail } from "./google-email.ts";
 
 export type UserRow = { id: string; email: string | null; password_hash: string | null; status: "active" | "suspended" };
 
@@ -13,29 +13,10 @@ export async function findUserByEmail(email: string): Promise<UserRow | null> {
   return rows[0] ?? null;
 }
 
-/** Returns the new user id, or null if the email is already taken (unique violation). */
-export async function createPasswordUser(input: {
-  email: string;
-  passwordHash: string;
-  displayName: string;
-  role: SelfRole;
-  consentVersion: string;
-}): Promise<string | null> {
-  try {
-    const { rows } = await db().query<{ id: string }>(
-      "INSERT INTO users (email, password_hash, display_name, role, privacy_consent_at, privacy_consent_version) VALUES ($1, $2, $3, $4, now(), $5) RETURNING id",
-      [input.email, input.passwordHash, input.displayName, input.role, input.consentVersion],
-    );
-    return rows[0].id;
-  } catch (err) {
-    if ((err as { code?: string }).code === "23505") return null;
-    throw err;
-  }
-}
-
 export type OAuthProfile = { email: string | null; emailVerified: boolean; displayName: string };
 export type OAuthResult =
-  | { ok: true; userId: string }
+  /** `linkedToPassword`: the identity was just attached to an existing account that has a password (tell its owner). */
+  | { ok: true; userId: string; linkedToPassword?: boolean }
   | { ok: false; reason: "suspended" | "consent_required" | "link_requires_password" };
 
 /**
@@ -45,7 +26,11 @@ export type OAuthResult =
  * (gmail.com): for other domains it is refused and the person signs in with their password instead, so a
  * re-registered domain cannot take over its old users' accounts. If the matching local account never proved
  * ownership of the email (password sign-up without verification), its password is cleared and its sessions
- * revoked, so someone who pre-registered a victim's email cannot keep access (pre-hijacking).
+ * revoked, so someone who pre-registered a victim's email cannot keep access (pre-hijacking). Linking to a verified
+ * account that has a password also ends all its sessions and remembered devices, and the caller notifies the owner,
+ * so a session or device someone else held on that account does not survive the new way in.
+ *
+ * Kept free of framework imports (explicit .ts paths) so it can be tested against the dev database with plain Node.
  */
 export async function findOrCreateOAuthUser(
   provider: "google" | "telegram",
@@ -96,10 +81,11 @@ async function resolve(
 
   const email = profile.emailVerified && profile.email ? profile.email.toLowerCase() : null;
   let userId: string | null = null;
+  let linkedToPassword = false;
 
   if (email) {
-    const byEmail = await client.query<{ id: string; status: string; email_verified_at: Date | null }>(
-      "SELECT id, status, email_verified_at FROM users WHERE email = $1 FOR UPDATE",
+    const byEmail = await client.query<{ id: string; status: string; email_verified_at: Date | null; has_password: boolean }>(
+      "SELECT id, status, email_verified_at, password_hash IS NOT NULL AS has_password FROM users WHERE email = $1 FOR UPDATE",
       [email],
     );
     const match = byEmail.rows[0];
@@ -111,8 +97,11 @@ async function resolve(
           "UPDATE users SET email_verified_at = now(), password_hash = NULL, updated_at = now() WHERE id = $1",
           [match.id],
         );
-        await client.query("DELETE FROM sessions WHERE user_id = $1", [match.id]);
+      } else if (match.has_password) {
+        linkedToPassword = true;
       }
+      await client.query("DELETE FROM sessions WHERE user_id = $1", [match.id]);
+      await client.query("DELETE FROM trusted_devices WHERE user_id = $1", [match.id]);
       userId = match.id;
     }
   }
@@ -133,5 +122,5 @@ async function resolve(
     provider,
     providerUserId,
   ]);
-  return { ok: true, userId };
+  return linkedToPassword ? { ok: true, userId, linkedToPassword } : { ok: true, userId };
 }

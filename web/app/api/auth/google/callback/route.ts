@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { CONSENT_VERSION, DEFAULT_ROLE, GOOGLE_COOKIE, googleConfig, isProduction, isSelfRole, type SelfRole } from "@/lib/auth/config";
+import { afterResponse } from "@/lib/auth/background";
 import { parseLocale, safeNextPath } from "@/lib/auth/http";
+import { sendGoogleLinkedEmail } from "@/lib/auth/mailer";
 import { allowPerIp } from "@/lib/auth/rate-limit";
 import { createSession } from "@/lib/auth/session";
 import { findOrCreateOAuthUser } from "@/lib/auth/users";
@@ -87,6 +89,10 @@ export async function GET(req: Request) {
       const code = { consent_required: "consent_required", link_requires_password: "google_link_password", suspended: "account_suspended" } as const;
       return toLogin(code[result.reason]);
     }
+
+    // Google was just attached to an account that also has a password: tell the owner, in case it was not them.
+    const linkedEmail = result.linkedToPassword && typeof info.email === "string" ? info.email.toLowerCase() : null;
+    if (linkedEmail) afterResponse("google-linked e-mail", async () => sendGoogleLinkedEmail(linkedEmail, lang));
 
     await createSession(result.userId);
     return NextResponse.redirect(new URL(safeNextPath(pending.next, lang), siteUrl));
