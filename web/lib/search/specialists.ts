@@ -52,7 +52,8 @@ export async function searchSpecialists(f: SearchFilters): Promise<SearchResult>
     args.push(like);
     const n = `$${args.length}`;
     where.push(
-      `(p.display_name ILIKE ${n} OR p.headline ILIKE ${n} OR c.name->>'ru' ILIKE ${n} OR c.name->>'uz' ILIKE ${n} OR c.name->>'en' ILIKE ${n})`,
+      `(p.display_name ILIKE ${n} OR p.headline ILIKE ${n} OR c.name->>'ru' ILIKE ${n} OR c.name->>'uz' ILIKE ${n} OR c.name->>'en' ILIKE ${n}
+          OR c.name->>'uz-cyrl' ILIKE ${n} OR c.name->>'kaa' ILIKE ${n})`,
     );
   }
   if (f.category) add("p.category = ?", f.category);

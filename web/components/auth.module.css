@@ -115,7 +115,7 @@
   font: inherit;
   color: var(--ink);
   background: var(--white);
-  border: 1.5px solid #b9c4be;
+  border: 1.5px solid #bcc5d3;
   border-radius: var(--radius-sm);
 }
 
@@ -185,7 +185,7 @@
   text-align: center;
   cursor: pointer;
   background: var(--white);
-  border: 1.5px solid #b9c4be;
+  border: 1.5px solid #bcc5d3;
   border-radius: var(--radius-pill);
 }
 
@@ -257,7 +257,7 @@
 .social {
   color: var(--ink);
   background: var(--white);
-  border: 1.5px solid #b9c4be;
+  border: 1.5px solid #bcc5d3;
 }
 
 .social:hover {
@@ -277,7 +277,7 @@
 
 .disabledSocial:hover {
   background: var(--white);
-  border-color: #b9c4be;
+  border-color: #bcc5d3;
 }
 
 .telegramBox {
@@ -403,8 +403,8 @@
 
 .consent input {
   flex: none;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   margin-top: 1px;
   accent-color: var(--emerald);
 }
@@ -456,7 +456,7 @@
   font-weight: 700;
   cursor: pointer;
   background: var(--white);
-  border: 1.5px solid #b9c4be;
+  border: 1.5px solid #bcc5d3;
   border-radius: var(--radius-pill);
 }
 

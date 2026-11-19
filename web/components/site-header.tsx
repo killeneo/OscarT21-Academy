@@ -1,6 +1,7 @@
 import type { Locale, Messages } from "@/lib/i18n";
 import { LangSwitcher } from "./lang-switcher";
 import { LogoMark } from "./icons";
+import { MobileMenu } from "./mobile-menu";
 import styles from "./site-chrome.module.css";
 
 type Props = { m: Messages["nav"]; brand: string; lang: Locale };
@@ -37,6 +38,13 @@ export function SiteHeader({ m, brand, lang }: Props) {
           <a href={`/${lang}/register`} className={styles.signup}>
             {m.signup}
           </a>
+          <MobileMenu
+            label={m.menu}
+            navLabel={m.label}
+            links={links}
+            login={{ href: `/${lang}/login`, label: m.login }}
+            signup={{ href: `/${lang}/register`, label: m.signup }}
+          />
         </div>
       </div>
     </header>

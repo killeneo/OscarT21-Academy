@@ -1,0 +1,362 @@
+.root {
+  position: fixed;
+  z-index: 90;
+  bottom: 16px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.trigger {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  color: var(--white);
+  cursor: pointer;
+  background: var(--forest);
+  border: 2px solid var(--white);
+  border-radius: 50%;
+  box-shadow: 0 6px 20px rgba(15, 42, 92, 0.3);
+}
+
+.trigger:hover {
+  background: var(--emerald);
+}
+
+.panel {
+  width: min(340px, calc(100vw - 32px));
+  max-height: calc(100vh - 96px);
+  max-height: calc(100dvh - 96px);
+  padding: 20px;
+  overflow-y: auto;
+  color: var(--ink);
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: 0 16px 40px rgba(15, 42, 92, 0.22);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.title {
+  font-size: 1.15rem;
+}
+
+.close,
+.reset {
+  min-height: 40px;
+  padding: 0 16px;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--forest);
+  cursor: pointer;
+  background: var(--white);
+  border: 1.5px solid var(--cta);
+  border-radius: var(--radius-pill);
+}
+
+.close:hover,
+.reset:hover {
+  color: var(--white);
+  background: var(--cta);
+}
+
+.reset {
+  width: 100%;
+  margin-top: 14px;
+}
+
+.group {
+  padding: 0;
+  margin: 0 0 14px;
+  border: 0;
+}
+
+.group legend {
+  margin-bottom: 8px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+
+.options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.options .option {
+  flex: 1 1 88px;
+}
+
+.options .option span {
+  height: 100%;
+}
+
+.optionsCol {
+  display: grid;
+  gap: 8px;
+}
+
+/* Native radio/checkbox stay in the DOM (screen readers, keyboard); the label is a big visible target. */
+.option input,
+.check input {
+  position: absolute;
+  opacity: 0;
+}
+
+.option {
+  display: block;
+}
+
+.option span {
+  display: grid;
+  place-items: center;
+  min-height: 48px;
+  padding: 6px 10px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  cursor: pointer;
+  background: var(--white);
+  border: 1.5px solid #858fa3;
+  border-radius: 14px;
+}
+
+.option input:checked + span {
+  color: var(--white);
+  background: var(--cta);
+  border-color: var(--cta);
+}
+
+.option input:focus-visible + span,
+.check input:focus-visible + span {
+  outline: 3px solid var(--forest);
+  outline-offset: 2px;
+}
+
+.checks {
+  display: grid;
+  gap: 8px;
+}
+
+.check span {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px 0 52px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--white);
+  border: 1.5px solid #858fa3;
+  border-radius: 14px;
+}
+
+/* A drawn checkbox so the state is visible without relying on colour alone. */
+.check span::before {
+  position: absolute;
+  left: 14px;
+  width: 24px;
+  height: 24px;
+  content: "";
+  background: var(--white);
+  border: 2px solid currentColor;
+  border-radius: 6px;
+}
+
+.check input:checked + span {
+  font-weight: 800;
+  border-color: var(--cta);
+  box-shadow: inset 0 0 0 1.5px var(--cta);
+}
+
+.check input:checked + span::after {
+  position: absolute;
+  left: 21px;
+  width: 8px;
+  height: 14px;
+  content: "";
+  border: solid currentColor;
+  border-width: 0 3px 3px 0;
+  transform: translate(0, -1px) rotate(45deg);
+}
+
+/* Read aloud */
+.speechRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.speechBtn {
+  min-height: 46px;
+  padding: 0 14px;
+  font: inherit;
+  font-weight: 800;
+  color: var(--white);
+  cursor: pointer;
+  background: var(--cta);
+  border: 1.5px solid var(--cta);
+  border-radius: var(--radius-pill);
+}
+
+.speechBtn:disabled {
+  color: var(--ink-muted);
+  cursor: not-allowed;
+  background: var(--white);
+  border-color: #858fa3;
+  opacity: 0.7;
+}
+
+.speechBtn:not(:disabled):hover {
+  background: var(--forest);
+}
+
+.speechLabel {
+  margin: 12px 0 8px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+
+.speechNote {
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.speechStatus {
+  min-height: 1.4em;
+  margin-top: 8px;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+/* First-visit callout pointing at the settings button */
+.hint {
+  position: relative;
+  width: min(320px, calc(100vw - 32px));
+  padding: 16px 18px;
+  color: var(--ink);
+  background: var(--white);
+  border: 2px solid var(--cta);
+  border-radius: 18px;
+  box-shadow: 0 16px 40px rgba(15, 42, 92, 0.25);
+}
+
+.hint p {
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+/* Arrow pointing down at the button. */
+.hint::after {
+  position: absolute;
+  bottom: -11px;
+  left: 17px;
+  width: 18px;
+  height: 18px;
+  content: "";
+  background: var(--white);
+  border: solid var(--cta);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.hintActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.hintPrimary,
+.hintSecondary {
+  min-height: 40px;
+  padding: 0 16px;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+  border: 1.5px solid var(--cta);
+  border-radius: var(--radius-pill);
+}
+
+.hintPrimary {
+  color: var(--white);
+  background: var(--cta);
+}
+
+.hintSecondary {
+  color: var(--forest);
+  background: var(--white);
+}
+
+.triggerHint {
+  box-shadow: 0 0 0 4px var(--gold), 0 6px 20px rgba(15, 42, 92, 0.3);
+  animation: hintPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes hintPulse {
+  50% {
+    box-shadow: 0 0 0 9px rgba(201, 208, 218, 0.35), 0 6px 20px rgba(15, 42, 92, 0.3);
+  }
+}
+
+/* Hands-free: hover-to-click progress ring and the voice indicator */
+.dwellRing {
+  position: fixed;
+  z-index: 95;
+  pointer-events: none;
+  border: 3px solid var(--forest);
+  border-radius: 12px;
+  background: linear-gradient(to right, rgba(201, 208, 218, 0.55) calc(var(--p, 0) * 100%), transparent 0);
+}
+
+.dwellRing[hidden] {
+  display: none;
+}
+
+.voiceBadge {
+  position: fixed;
+  z-index: 90;
+  bottom: 24px;
+  left: 76px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 100px);
+  padding: 8px 14px;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--white);
+  background: var(--forest);
+  border-radius: var(--radius-pill);
+}
+
+.voiceBadge kbd {
+  padding: 1px 7px;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--forest);
+  background: var(--white);
+  border-radius: 6px;
+}
+
+.voiceDot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  background: var(--gold);
+  border-radius: 50%;
+}

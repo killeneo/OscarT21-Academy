@@ -1,4 +1,5 @@
-import type { SVGProps } from "react";
+import Image from "next/image";
+import type { CSSProperties, SVGProps } from "react";
 
 /** All icons are decorative by default (aria-hidden); meaning is always carried by adjacent text. */
 type IconProps = SVGProps<SVGSVGElement>;
@@ -14,20 +15,16 @@ export function Sparkle(props: IconProps) {
   );
 }
 
-export function LogoMark(props: IconProps) {
-  return (
-    <svg viewBox="0 0 32 32" {...base} {...props}>
-      <rect width="32" height="32" rx="10" fill="#164a42" />
-      <path d="M16 6c.9 5.4 4.6 9.1 10 10-5.4.9-9.1 4.6-10 10-.9-5.4-4.6-9.1-10-10 5.4-.9 9.1-4.6 10-10Z" fill="#42a99a" />
-    </svg>
-  );
+/** Brand logo: raster with transparent background (public/logo.png). Size it by height; width follows the aspect ratio. */
+export function LogoMark({ className, style }: { className?: string; style?: CSSProperties }) {
+  return <Image src="/logo.png" width={640} height={459} alt="" aria-hidden="true" priority className={className} style={{ width: "auto", ...style }} />;
 }
 
 export function CheckIcon(props: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="none" {...base} {...props}>
-      <circle cx="12" cy="12" r="12" fill="#c5ddd5" />
-      <path d="m7 12.5 3.2 3.2L17 8.8" stroke="#164a42" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="12" cy="12" r="12" fill="#c3d3ed" />
+      <path d="m7 12.5 3.2 3.2L17 8.8" stroke="#0f2a5c" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -35,8 +32,8 @@ export function CheckIcon(props: IconProps) {
 export function PlayIcon(props: IconProps) {
   return (
     <svg viewBox="0 0 40 40" {...base} {...props}>
-      <circle cx="20" cy="20" r="20" fill="#dcebe6" />
-      <path d="M16 12.5v15l12-7.5-12-7.5Z" fill="#164a42" />
+      <circle cx="20" cy="20" r="20" fill="#dce6f5" />
+      <path d="M16 12.5v15l12-7.5-12-7.5Z" fill="#0f2a5c" />
     </svg>
   );
 }
@@ -128,7 +125,7 @@ export function SlidersIcon(props: IconProps) {
 /* ---- Illustrated avatars / scenes (no real photos: synthetic placeholders) ---- */
 
 type Tone = "gold" | "teal" | "sand" | "emerald";
-const toneFill: Record<Tone, string> = { gold: "#f9edcb", teal: "#d3ece8", sand: "#ecefe9", emerald: "#dcebe6" };
+const toneFill: Record<Tone, string> = { gold: "#e9edf2", teal: "#d6e4f7", sand: "#e8ecf1", emerald: "#dce6f5" };
 
 /** Small round illustrated face, used inline in the hero headline. */
 export function AvatarFace({ tone = "gold", ...props }: IconProps & { tone?: Tone }) {
@@ -136,8 +133,8 @@ export function AvatarFace({ tone = "gold", ...props }: IconProps & { tone?: Ton
     <svg viewBox="0 0 48 48" {...base} {...props}>
       <circle cx="24" cy="24" r="24" fill={toneFill[tone]} />
       <circle cx="24" cy="19" r="8" fill="#f2c9a5" />
-      <path d="M15 18c0-6 4-9 9-9s9 3 9 9c-2-3-5-4-9-4s-7 1-9 4Z" fill="#164a42" />
-      <path d="M8 44c1-9 7-14 16-14s15 5 16 14a24 24 0 0 1-32 0Z" fill="#164a42" />
+      <path d="M15 18c0-6 4-9 9-9s9 3 9 9c-2-3-5-4-9-4s-7 1-9 4Z" fill="#0f2a5c" />
+      <path d="M8 44c1-9 7-14 16-14s15 5 16 14a24 24 0 0 1-32 0Z" fill="#0f2a5c" />
     </svg>
   );
 }

@@ -1,4 +1,4 @@
-import type { Locale, Messages } from "@/lib/i18n";
+import { localeNames, locales, type Locale, type Messages } from "@/lib/i18n";
 import { buildQuery, SORTS, type SearchFilters } from "@/lib/search/params";
 import type { Category, SearchResult, SpecialistCard } from "@/lib/search/specialists";
 import { AvatarFace, ShieldIcon } from "./icons";
@@ -6,9 +6,9 @@ import { ResponsiveDetails } from "./responsive-details";
 import styles from "./search.module.css";
 
 type M = Messages["search"];
-type Props = { lang: Locale; m: M; filters: SearchFilters; categories: Category[]; result: SearchResult };
+type Props = { lang: Locale; m: M; filters: SearchFilters; categories: Category[]; result: SearchResult; base?: string };
 
-const NUMBER_LOCALE: Record<Locale, string> = { ru: "ru-RU", uz: "uz-UZ", en: "en-US" };
+const NUMBER_LOCALE: Record<Locale, string> = Object.fromEntries(locales.map((l) => [l, localeNames[l].numbers])) as Record<Locale, string>;
 const TONES = ["gold", "teal", "emerald", "sand"] as const;
 
 const fill = (tpl: string, vars: Record<string, string | number>) =>
@@ -78,8 +78,8 @@ function Card({ c, m, lang }: { c: SpecialistCard; m: M; lang: Locale }) {
   );
 }
 
-export function SpecialistSearch({ lang, m, filters, categories, result }: Props) {
-  const base = `/${lang}/specialists`;
+export function SpecialistSearch({ lang, m, filters, categories, result, base: basePath }: Props) {
+  const base = basePath ?? `/${lang}/specialists`;
   const href = (o: Partial<SearchFilters>) => `${base}${buildQuery(filters, { page: 1, ...o })}`;
   const pageHref = (page: number) => `${base}${buildQuery(filters, { page })}`;
 

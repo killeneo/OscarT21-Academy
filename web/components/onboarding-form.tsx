@@ -74,7 +74,7 @@ export function OnboardingForm({ role, lang, m, auth, cities, categories, initia
       });
       const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: { code?: string } } | null;
       if (res.ok && data?.ok) {
-        router.replace(role === "parent" ? `/${lang}/specialists` : `/${lang}/account`);
+        router.replace(role === "parent" ? `/${lang}` : `/${lang}/account`);
         router.refresh();
         return;
       }
@@ -235,7 +235,7 @@ export function OnboardingForm({ role, lang, m, auth, cities, categories, initia
                 {pending ? m.saving : m.save}
               </button>
             )}
-            <a className={styles.forgot} style={{ justifySelf: "center" }} href={role === "parent" ? `/${lang}/specialists` : `/${lang}/account`}>
+            <a className={styles.forgot} style={{ justifySelf: "center" }} href={role === "parent" ? `/${lang}` : `/${lang}/account`}>
               {m.later}
             </a>
           </div>

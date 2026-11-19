@@ -23,7 +23,7 @@ export function LogoutButton({
     try {
       await fetch("/api/auth/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
     } finally {
-      router.replace(`/${lang}/login`);
+      router.replace(`/${lang}`);
       router.refresh();
     }
   }

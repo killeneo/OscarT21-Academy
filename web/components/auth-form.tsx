@@ -65,13 +65,18 @@ export function AuthForm({ mode, lang, m, consent, telegramBot, next, initialErr
       });
       const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: { code?: string } } | null;
       if (res.ok && data?.ok) {
+        // Registration answers identically for taken addresses (no account enumeration), so check for a session.
+        if (isRegister && !(await fetch("/api/auth/me", { cache: "no-store" })).ok) {
+          setError("check_email");
+          return;
+        }
         // New accounts continue to the role-specific profile step; returning users go where they were headed.
         router.replace(
           isRegister
             ? `/${lang}/onboarding`
             : next && next.startsWith("/") && !next.startsWith("//")
               ? next
-              : `/${lang}/specialists`,
+              : `/${lang}`,
         );
         router.refresh();
         return;

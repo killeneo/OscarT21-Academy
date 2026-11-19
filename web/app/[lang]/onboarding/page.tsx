@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { OnboardingPage } from "@/components/onboarding-page";
-import { hasLocale } from "@/lib/i18n";
+import { getMessages, hasLocale } from "@/lib/i18n";
 
-export const metadata: Metadata = { robots: { index: false, follow: false } };
+export async function generateMetadata({ params }: PageProps<"/[lang]/onboarding">): Promise<Metadata> {
+  const { lang } = await params;
+  if (!hasLocale(lang)) return {};
+  const m = getMessages(lang);
+  return { title: `${m["onboarding"]["stepLabel"]} — ${m.common.brand}`, robots: { index: false, follow: false } };
+}
 
 export default async function Page({ params }: PageProps<"/[lang]/onboarding">) {
   const { lang } = await params;

@@ -19,7 +19,7 @@ export function SiteFooter({ m, brand, lang, langLabel }: Props) {
       <div className={styles.footerInner}>
         <div>
           <a href={`/${lang}`} className={styles.brand}>
-            <LogoMark style={{ width: 34, height: 34 }} />
+            <LogoMark style={{ height: 34 }} />
             {brand}
           </a>
           <p className={styles.about}>{m.about}</p>
@@ -45,7 +45,7 @@ export function SiteFooter({ m, brand, lang, langLabel }: Props) {
         <p>
           © {brand}. {m.rights}
         </p>
-        <LangSwitcher current={lang} label={langLabel} />
+        <LangSwitcher current={lang} label={langLabel} placement="up" />
       </div>
 
       {/* Decorative oversized wordmark that closes the page. */}

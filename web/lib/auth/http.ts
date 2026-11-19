@@ -4,7 +4,6 @@ import { defaultLocale, hasLocale, type Locale } from "@/lib/i18n";
 export type ErrorCode =
   | "invalid_input"
   | "invalid_credentials"
-  | "email_taken"
   | "weak_password"
   | "rate_limited"
   | "forbidden_origin"
@@ -40,9 +39,18 @@ export function hasSameOrigin(req: Request): boolean {
   }
 }
 
-/** Best-effort client IP. Only meaningful behind a trusted reverse proxy that overwrites X-Forwarded-For. */
+/**
+ * Best-effort client IP for rate limiting. The LEFT-most X-Forwarded-For entry is written by the client, so it
+ * is never trusted: an attacker could rotate it to get a fresh rate-limit bucket on every request. We use the
+ * address the hosting platform sets itself, then the RIGHT-most X-Forwarded-For entry (appended by our own
+ * proxy). Only meaningful behind a trusted reverse proxy; the per-account limits do not depend on it.
+ */
 export function clientIp(req: Request): string {
-  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim().slice(0, 64) || "unknown";
+  const h = req.headers;
+  const platform = h.get("x-vercel-forwarded-for") ?? h.get("x-real-ip");
+  if (platform?.trim()) return platform.trim().slice(0, 64);
+  const hops = h.get("x-forwarded-for")?.split(",").map((s) => s.trim()).filter(Boolean);
+  return hops?.at(-1)?.slice(0, 64) || "unknown";
 }
 
 const MAX_BODY_CHARS = 8 * 1024;
@@ -50,6 +58,9 @@ const MAX_BODY_CHARS = 8 * 1024;
 /** Parses a small JSON object body; returns null for wrong content type, oversize or invalid JSON. */
 export async function readJson(req: Request): Promise<Record<string, unknown> | null> {
   if (!req.headers.get("content-type")?.toLowerCase().startsWith("application/json")) return null;
+  // Reject an oversize body from its declared length before buffering any of it.
+  const declared = Number(req.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > MAX_BODY_CHARS * 4) return null;
   const text = await req.text();
   if (text.length > MAX_BODY_CHARS) return null;
   try {
@@ -81,7 +92,7 @@ export function parseLocale(value: unknown): Locale {
 
 /** Only same-site relative paths are allowed as post-login destinations (prevents open redirects). */
 export function safeNextPath(value: unknown, lang: Locale): string {
-  const fallback = `/${lang}/specialists`;
+  const fallback = `/${lang}`;
   if (typeof value !== "string" || value.length > 200) return fallback;
   if (!value.startsWith("/") || value.startsWith("//") || value.includes("\\") || /[\u0000-\u001f]/.test(value)) {
     return fallback;

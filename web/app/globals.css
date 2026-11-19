@@ -1,32 +1,32 @@
 /*
  * Design tokens: "Inclusive Tech / Trust & Growth".
- * Brand: emerald #176B5B, deep green #164A42, teal #42A99A, background #F7F8F5, gold #E7B957, graphite #303B3A.
+ * Brand (YONMA-YON.UZ, from logo): royal blue #1D4F9E, navy #0F2A5C, light steel blue #7EA6E0, background #F4F6F9, silver #C9D0DA, steel graphite #212A38. Token names (--emerald, --teal, --gold) kept from the earlier palette.
  * Contrast notes (WCAG 2.1 AA):
- *  - graphite text (#303B3A) on bg / white / every tint >= 8:1.
- *  - muted text (#55625F) on bg / white / tints >= 5:1.
- *  - white on the emerald CTA (#176B5B) ~ 6.4:1; on deep green ~ 10:1.
- *  - Teal and gold are FILLS / decoration only: no white text on teal, no light text on gold.
+ *  - graphite text (#212a38) on bg / white / every tint >= 8:1.
+ *  - muted text (#515d6e) on bg / white / tints >= 5:1.
+ *  - white on the emerald CTA (#1d4f9e) ~ 8:1; on navy ~ 14:1.
+ *  - Teal and gold are FILLS / decoration only: no white text on teal, no light text on silver.
  */
 :root {
   --white: #ffffff;
-  --bg: #f7f8f5;
+  --bg: #f4f6f9;
 
-  --emerald: #176b5b;
-  --forest: #164a42;
-  --teal: #42a99a;
-  --gold: #e7b957;
-  --graphite: #303b3a;
+  --emerald: #1d4f9e;
+  --forest: #0f2a5c;
+  --teal: #7ea6e0;
+  --gold: #c9d0da;
+  --graphite: #212a38;
 
-  --tint-emerald: #dcebe6;
-  --tint-emerald-strong: #c5ddd5;
-  --tint-teal: #d3ece8;
-  --tint-gold: #f9edcb;
-  --tint-sand: #ecefe9;
+  --tint-emerald: #dce6f5;
+  --tint-emerald-strong: #c3d3ed;
+  --tint-teal: #d6e4f7;
+  --tint-gold: #e9edf2;
+  --tint-sand: #e8ecf1;
 
   --ink: var(--graphite);
-  --ink-muted: #55625f;
+  --ink-muted: #515d6e;
   --cta: var(--emerald);
-  --line: #dfe5e0;
+  --line: #dae0e9;
 
   --radius-card: 24px;
   --radius-sm: 16px;
@@ -116,8 +116,10 @@ svg {
 .skip-link {
   position: absolute;
   left: 16px;
-  top: -64px;
+  top: 12px;
   z-index: 100;
+  /* Fully off-screen whatever the text size (a fixed negative top let tall, enlarged text peek in). */
+  transform: translateY(calc(-100% - 24px));
   padding: 10px 18px;
   font-weight: 800;
   color: var(--white);
@@ -126,7 +128,7 @@ svg {
 }
 
 .skip-link:focus {
-  top: 12px;
+  transform: none;
   outline-color: var(--gold);
 }
 
@@ -146,6 +148,157 @@ svg {
 
 @media (max-width: 900px) {
   :root {
-    --header-h: 96px;
+    --header-h: 64px;
   }
+}
+
+/* ---------- Visitor display settings (data-* set by the settings panel) ---------- */
+html[data-text="large"] {
+  font-size: 125%;
+  --header-h: 64px;
+}
+
+html[data-text="xlarge"] {
+  font-size: 150%;
+  --header-h: 72px;
+}
+
+@media (max-width: 900px) {
+  html[data-text="large"] {
+    --header-h: 72px;
+  }
+
+  html[data-text="xlarge"] {
+    --header-h: 80px;
+  }
+}
+
+html[data-links="underline"] a {
+  text-decoration: underline !important;
+  text-underline-offset: 3px;
+}
+
+html[data-motion="reduce"] {
+  scroll-behavior: auto;
+}
+
+html[data-motion="reduce"] *,
+html[data-motion="reduce"] *::before,
+html[data-motion="reduce"] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* High contrast, black on white. */
+html[data-contrast="high"] {
+  --bg: #ffffff;
+  --white: #ffffff;
+  --ink: #000000;
+  --ink-muted: #000000;
+  --line: #000000;
+  --emerald: #000000;
+  --forest: #000000;
+  --cta: #000000;
+  --teal: #000000;
+  --tint-emerald: #ffffff;
+  --tint-emerald-strong: #ffffff;
+  --tint-teal: #ffffff;
+  --tint-gold: #ffffff;
+  --tint-sand: #ffffff;
+}
+
+/* High contrast, yellow on black. Buttons are yellow with black text (text uses --white, now black). */
+html[data-contrast="dark"] {
+  --bg: #000000;
+  --white: #000000;
+  --ink: #ffee00;
+  --ink-muted: #ffffff;
+  --line: #ffee00;
+  --emerald: #ffee00;
+  --forest: #ffee00;
+  --cta: #ffee00;
+  --teal: #ffee00;
+  --gold: #ffee00;
+  --tint-emerald: #000000;
+  --tint-emerald-strong: #000000;
+  --tint-teal: #000000;
+  --tint-gold: #000000;
+  --tint-sand: #000000;
+}
+
+html[data-contrast] input,
+html[data-contrast] select,
+html[data-contrast] textarea {
+  color: var(--ink);
+  background: var(--white);
+  border-color: var(--ink) !important;
+}
+
+html[data-contrast] :focus-visible {
+  outline: 4px solid var(--ink);
+  outline-offset: 3px;
+}
+
+html[data-contrast] header {
+  color: var(--ink);
+  background: var(--white) !important;
+  border-bottom: 2px solid var(--ink) !important;
+  backdrop-filter: none !important;
+}
+
+html[data-contrast] footer {
+  color: var(--ink);
+  background: var(--white) !important;
+  border-top: 2px solid var(--ink);
+}
+
+html[data-contrast] footer * {
+  color: var(--ink) !important;
+}
+
+html[data-contrast] img {
+  border: 1px solid var(--ink);
+}
+
+/* Operating-system contrast preference: stronger muted text and borders without any setting. */
+@media (prefers-contrast: more) {
+  :root {
+    --ink-muted: #2a3342;
+    --line: #5b6a80;
+  }
+}
+
+/* Windows High Contrast / forced colors: keep controls recognisable with system colours. */
+@media (forced-colors: active) {
+  button,
+  input,
+  select,
+  textarea,
+  summary {
+    border: 1px solid ButtonText;
+  }
+
+  a {
+    color: LinkText;
+  }
+
+  :focus-visible {
+    outline: 3px solid Highlight;
+  }
+}
+
+/* Larger click areas (hands-free setting): helps pointing with a head tracker, mouth stick or tremor. */
+html[data-targets="large"] :is(button, select, summary, input:not([type="checkbox"]):not([type="radio"])) {
+  min-height: 56px;
+}
+
+html[data-targets="large"] a {
+  padding-block: 10px;
+}
+
+/* One-key (Ctrl) mode: the control that will be pressed next must be unmistakable. */
+html[data-scan="on"] :focus {
+  outline: 5px solid var(--forest);
+  outline-offset: 4px;
+  box-shadow: 0 0 0 9px var(--white);
 }

@@ -23,7 +23,7 @@ export function AuthShell({ lang, brand, skipLabel, m, title, subtitle, children
       <aside className={styles.side}>
         <Sparkle className={styles.sparkle} />
         <a href={`/${lang}`} className={styles.brand}>
-          <LogoMark style={{ width: 34, height: 34 }} />
+          <LogoMark style={{ height: 34 }} />
           {brand}
         </a>
         <div className={styles.sideBody}>
@@ -39,7 +39,7 @@ export function AuthShell({ lang, brand, skipLabel, m, title, subtitle, children
       <main id="main" className={styles.main}>
         <div className={styles.card}>
           <a href={`/${lang}`} className={styles.mobileBrand}>
-            <LogoMark style={{ width: 32, height: 32 }} />
+            <LogoMark style={{ height: 32 }} />
             {brand}
           </a>
           <h1>{title}</h1>

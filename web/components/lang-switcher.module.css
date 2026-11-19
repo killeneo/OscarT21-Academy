@@ -1,36 +1,98 @@
-.switcher ul {
-  display: flex;
-  gap: 2px;
-  padding: 2px;
+.switcher {
+  position: relative;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 12px 0 10px;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  color: var(--ink);
+  cursor: pointer;
   background: var(--white);
   border: 1.5px solid var(--line);
   border-radius: var(--radius-pill);
+  transition: background-color 0.15s, border-color 0.15s;
 }
 
-.switcher a {
+.trigger:hover,
+.trigger[aria-expanded="true"] {
+  background: var(--tint-emerald);
+  border-color: var(--emerald);
+}
+
+.globe {
+  width: 18px;
+  height: 18px;
+  color: var(--emerald);
+}
+
+.chevron {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.2s;
+}
+
+.trigger[aria-expanded="true"] .chevron {
+  transform: rotate(180deg);
+}
+
+.menu {
+  position: absolute;
+  z-index: 70;
+  top: calc(100% + 8px);
+  right: 0;
   display: grid;
-  color: var(--ink);
-  place-items: center;
-  min-width: 34px;
-  min-height: 30px;
-  padding: 0 8px;
-  font-weight: 800;
-  font-size: 0.75rem;
-  letter-spacing: 0.04em;
-  text-decoration: none;
-  border-radius: var(--radius-pill);
-  transition: background-color 0.15s;
+  gap: 2px;
+  min-width: 220px;
+  padding: 6px;
+  list-style: none;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: 0 16px 40px rgba(15, 42, 92, 0.16), 0 2px 6px rgba(15, 42, 92, 0.06);
 }
 
-.switcher a:hover {
+.menu[hidden] {
+  display: none;
+}
+
+.switcher[data-placement="up"] .menu {
+  top: auto;
+  bottom: calc(100% + 8px);
+}
+
+.menu a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 14px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: none;
+  border-radius: 12px;
+}
+
+.menu a:hover {
   background: var(--tint-emerald);
 }
 
-.switcher .current {
-  color: var(--white);
-  background: var(--cta);
+.menu .current {
+  font-weight: 800;
+  color: var(--forest);
+  background: var(--tint-emerald);
 }
 
-.switcher .current:hover {
-  background: var(--cta);
+.check {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--emerald);
 }
