@@ -1,0 +1,268 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useId, useState, type FormEvent } from "react";
+import type { Messages } from "@/lib/i18n";
+import styles from "./auth.module.css";
+
+export type Role = "parent" | "specialist" | "organization";
+const ROLES: Role[] = ["parent", "specialist", "organization"];
+
+type Props = {
+  mode: "login" | "register";
+  lang: string;
+  m: Messages["auth"];
+  consent: Messages["consent"];
+  telegramBot: string | null;
+  /** Destination after sign-in; validated again on the server. */
+  next?: string;
+  /** Error code coming from a redirect (e.g. Google callback). */
+  initialError?: string;
+  /** Role preselected from the link that opened the sign-up page. */
+  initialRole?: Role;
+};
+
+function GoogleLogo() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.4a5.5 5.5 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.6-5.2 3.6-8.8Z" />
+      <path fill="#34A853" d="M12 24c3.2 0 6-1.1 7.9-2.9l-3.9-3c-1.1.7-2.4 1.2-4 1.2-3.1 0-5.7-2.1-6.6-4.9H1.4v3.1A12 12 0 0 0 12 24Z" />
+      <path fill="#FBBC05" d="M5.4 14.3a7.2 7.2 0 0 1 0-4.6V6.6H1.4a12 12 0 0 0 0 10.8l4-3.1Z" />
+      <path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A12 12 0 0 0 1.4 6.6l4 3.1C6.3 6.9 8.900 4.800 12 4.800Z" />
+    </svg>
+  );
+}
+
+function TelegramLogo() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <circle cx="12" cy="12" r="12" fill="#229ED9" />
+      <path fill="#fff" d="M5.4 11.8 17.600 7c.6-.2 1 .1.9.9l-2.100 9.800c-.1.700-.6.900-1.200.5l-3.200-2.400-1.500 1.500c-.2.200-.3.300-.7.300l.2-3.300 6-5.400c.3-.2-.1-.4-.4-.2l-7.400 4.700-3.200-1c-.7-.2-.7-.7.200-1Z" />
+    </svg>
+  );
+}
+
+export function AuthForm({ mode, lang, m, consent, telegramBot, next, initialError, initialRole }: Props) {
+  const router = useRouter();
+  const uid = useId();
+  const [role, setRole] = useState<Role>(initialRole ?? "parent");
+  const [showPassword, setShowPassword] = useState(false);
+  const [consentChecked, setConsentChecked] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(initialError ?? null);
+  const [sent, setSent] = useState(false);
+  const isRegister = mode === "register";
+  // Own keys only: "constructor" or "toString" must not count as known error codes.
+  const errorText = error ? (Object.hasOwn(m.errors, error) ? m.errors[error as keyof typeof m.errors] : m.errors.server_error) : null;
+
+  async function post(url: string, payload: Record<string, unknown>) {
+    setPending(true);
+    setError(null);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = (await res.json().catch(() => null)) as { ok?: boolean; error?: { code?: string } } | null;
+      if (res.ok && data?.ok) {
+        // Sign-up only sends a link (the same answer for new and taken addresses); the account is created from it.
+        if (isRegister) {
+          setSent(true);
+          return;
+        }
+        // Returning users go where they were headed.
+        router.replace(next && next.startsWith("/") && !next.startsWith("//") ? next : `/${lang}`);
+        router.refresh();
+        return;
+      }
+      setError(data?.error?.code ?? "server_error");
+    } catch {
+      setError("network");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const email = String(form.get("email") ?? "");
+    const payload: Record<string, unknown> = isRegister
+      ? { email, role, consent: consentChecked, lang }
+      : { email, password: String(form.get("password") ?? "") };
+    void post(isRegister ? "/api/auth/register" : "/api/auth/login", payload);
+  }
+
+  // Sign-in is a plain link; sign-up is a same-origin form POST, the only way the server accepts consent.
+  const googleParams = new URLSearchParams({ lang });
+  if (!isRegister && next) googleParams.set("next", next);
+  const telegramParams = new URLSearchParams(isRegister ? { mode: "register", role } : { mode: "login", ...(next ? { next } : {}) });
+
+  const other = isRegister
+    ? { text: m.haveAccount, link: m.signIn, href: `/${lang}/login` }
+    : { text: m.noAccount, link: m.createAccount, href: `/${lang}/register` };
+
+  if (sent) {
+    return (
+      <>
+        <p className={styles.notice} role="status">
+          {m.registerSent}
+        </p>
+        <p className={styles.switch}>
+          {m.haveAccount} <a href={`/${lang}/login`}>{m.signIn}</a>
+        </p>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div aria-live="polite" id={`${uid}-error`}>
+        {errorText ? (
+          <p role="alert" className={styles.alert}>
+            {errorText}
+          </p>
+        ) : null}
+      </div>
+
+      <form className={styles.form} onSubmit={onSubmit} aria-describedby={`${uid}-error`}>
+        {isRegister ? (
+          <fieldset className={styles.roles}>
+            <legend className={styles.legend}>{m.roleLegend}</legend>
+            {ROLES.map((r) => (
+              <label key={r} className={styles.roleOption}>
+                <input type="radio" name="role" value={r} checked={role === r} onChange={() => setRole(r)} />
+                <span>{m.roles[r]}</span>
+              </label>
+            ))}
+          </fieldset>
+        ) : null}
+
+        <div className={styles.field}>
+          <label htmlFor={`${uid}-email`}>{m.email}</label>
+          <input
+            id={`${uid}-email`}
+            name="email"
+            type="email"
+            className={styles.input}
+            autoComplete="email"
+            inputMode="email"
+            maxLength={254}
+            aria-describedby={isRegister ? `${uid}-email-hint` : undefined}
+            required
+          />
+          {isRegister ? (
+            <p id={`${uid}-email-hint`} className={styles.hint}>
+              {m.registerEmailHint}
+            </p>
+          ) : null}
+        </div>
+
+        {/* The password is chosen on the page the mailed link opens, by the person who controls the address. */}
+        {isRegister ? null : (
+          <div className={styles.field}>
+            <label htmlFor={`${uid}-password`}>{m.password}</label>
+            <div className={styles.passwordWrap}>
+              <input
+                id={`${uid}-password`}
+                name="password"
+                type={showPassword ? "text" : "password"}
+                className={styles.input}
+                autoComplete="current-password"
+                maxLength={128}
+                required
+              />
+              <button
+                type="button"
+                className={styles.toggle}
+                onClick={() => setShowPassword((v) => !v)}
+                aria-pressed={showPassword}
+              >
+                {showPassword ? m.hidePassword : m.showPassword}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isRegister ? (
+          <div className={styles.consent}>
+            <input
+              id={`${uid}-consent`}
+              type="checkbox"
+              checked={consentChecked}
+              onChange={(e) => setConsentChecked(e.target.checked)}
+              required
+            />
+            <label htmlFor={`${uid}-consent`}>
+              {consent.before}
+              <a href={`/${lang}/privacy`} target="_blank" rel="noopener">
+                {consent.link}
+              </a>
+              {consent.after}
+            </label>
+          </div>
+        ) : (
+          <a href={`/${lang}/forgot-password`} className={styles.forgot}>
+            {m.forgotLink}
+          </a>
+        )}
+
+        <button type="submit" className={styles.submit} disabled={pending}>
+          {pending ? m.submitting : isRegister ? m.submitRegister : m.submitLogin}
+        </button>
+      </form>
+
+      <p className={styles.divider} aria-hidden="true">
+        {m.or}
+      </p>
+
+      <div className={styles.socials}>
+        {/* The OAuth flow is a full-page redirect handled by the server. */}
+        {isRegister ? (
+          <form
+            method="post"
+            action="/api/auth/google"
+            onSubmit={(event) => {
+              if (!consentChecked) {
+                event.preventDefault();
+                setError("consent_required");
+              }
+            }}
+          >
+            <input type="hidden" name="lang" value={lang} />
+            <input type="hidden" name="role" value={role} />
+            <input type="hidden" name="next" value={`/${lang}/onboarding`} />
+            <input type="hidden" name="consent" value={consentChecked ? "1" : "0"} />
+            <button type="submit" className={styles.social}>
+              <GoogleLogo />
+              {m.google}
+            </button>
+          </form>
+        ) : (
+          <a className={styles.social} href={`/api/auth/google?${googleParams.toString()}`}>
+            <GoogleLogo />
+            {m.google}
+          </a>
+        )}
+
+        {/* Telegram's widget is a third-party script, so it lives on its own page without password fields. */}
+        {telegramBot ? (
+          <a className={styles.social} href={`/${lang}/telegram?${telegramParams.toString()}`}>
+            <TelegramLogo />
+            {m.telegram}
+          </a>
+        ) : (
+          <button type="button" className={`${styles.social} ${styles.disabledSocial}`} aria-disabled="true" onClick={() => setError("not_configured")}>
+            <TelegramLogo />
+            {m.telegram}
+          </button>
+        )}
+      </div>
+
+      <p className={styles.switch}>
+        {other.text} <a href={other.href}>{other.link}</a>
+      </p>
+    </>
+  );
+}
