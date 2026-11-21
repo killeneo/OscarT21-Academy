@@ -4,7 +4,7 @@
 // Covers: headers, CSRF/Origin, input limits, mass assignment, account enumeration, sessions, brute-force limits,
 // password-reset tokens, authorization (IDOR / privilege escalation), injection payloads, open redirects.
 import assert from "node:assert/strict";
-import { createHash, randomBytes } from "node:crypto";
+import { hash, randomBytes } from "node:crypto";
 import { after, beforeEach, describe, test } from "node:test";
 import pg from "pg";
 
@@ -18,7 +18,8 @@ const BASE = process.env.BASE_URL ?? "http://localhost:3000";
 const HOST = new URL(BASE).host;
 const DOMAIN = "sectest.invalid";
 const PASSWORD = "correct horse battery staple";
-const sha256 = (v) => createHash("sha256").update(v).digest();
+// Server-side token lookup key (SHA-256 of a random 256-bit token, not a password hash).
+const sha256 = (v) => hash("sha256", v, "buffer");
 const uniq = () => `${randomBytes(6).toString("hex")}@${DOMAIN}`;
 
 let up = false;
